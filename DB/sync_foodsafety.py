@@ -1,15 +1,22 @@
 """
-식약처(식품안전나라) I2520 서비스 데이터를 가져와서
-PostgreSQL foods / food_allergen_map 테이블에 적재하는 스크립트.
+공공데이터포털 - 한국식품안전관리인증원(HACCP) 제품이미지 및 포장지표기정보
+(CertImgListServiceV3)를 가져와서 Supabase(PostgreSQL)에 적재하는 스크립트.
 
 담당: 백엔드 A (데이터/DB)
 
 실행: python db/sync_foodsafety.py
+
+v2: 배치(묶음) INSERT로 속도 개선.
+    - 기존: 14,672건을 한 건씩 INSERT (왕복 14,672번 이상) -> 매우 느림
+    - 개선: execute_values로 한 번에 수백~수천 건씩 묶어서 INSERT -> 왕복 수십 번 수준
 """
 
 import os
+import time
 import requests
 import psycopg2
+from psycopg2.extras import execute_values
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from dotenv import load_dotenv
 
@@ -17,124 +24,179 @@ load_dotenv()
 
 API_KEY = os.getenv("FOODSAFETY_API_KEY")
 DATABASE_URL = os.getenv("DATABASE_URL")
-SERVICE_ID = "I2520"
-BASE_URL = "http://openapi.foodsafetykorea.go.kr/api"
 
-PAGE_SIZE = 1000  # 식약처 API는 한 번에 최대 1000건 정도 권장
+BASE_URL = "https://apis.data.go.kr/B553748/CertImgListServiceV3/getCertImgListServiceV3"
+NUM_OF_ROWS = 100
+MAX_PAGES = None
+REQUEST_DELAY_SEC = 0.3
+BATCH_SIZE = 1000  # 한 번에 DB에 넣을 묶음 크기
 
 
-def fetch_page(start: int, end: int) -> dict:
-    """지정한 범위(start~end)의 데이터를 한 페이지 가져온다."""
-    url = f"{BASE_URL}/{API_KEY}/{SERVICE_ID}/json/{start}/{end}"
-    resp = requests.get(url, timeout=30)
+def fetch_page(page_no: int) -> ET.Element:
+    params = {
+        "ServiceKey": API_KEY,
+        "pageNo": page_no,
+        "numOfRows": NUM_OF_ROWS,
+        "returnType": "xml",
+    }
+    resp = requests.get(BASE_URL, params=params, timeout=30)
     resp.raise_for_status()
-    return resp.json()
+    return ET.fromstring(resp.text)
+
+
+def parse_items(root: ET.Element):
+    header = root.find("header")
+    result_code = header.findtext("resultCode") if header is not None else None
+    if result_code and result_code != "OK":
+        message = header.findtext("resultMessage")
+        raise RuntimeError(f"API 에러: {result_code} - {message}")
+
+    body = root.find("body")
+    total_count = int(body.findtext("totalCount", default="0"))
+    items = []
+    items_el = body.find("items")
+    if items_el is not None:
+        for item in items_el.findall("item"):
+            items.append({
+                "prdlstReportNo": item.findtext("prdlstReportNo"),
+                "prdlstNm": item.findtext("prdlstNm"),
+                "rawmtrl": item.findtext("rawmtrl"),
+                "allergy": item.findtext("allergy"),
+                "prdkind": item.findtext("prdkind"),
+                "manufacture": item.findtext("manufacture"),
+            })
+    return items, total_count
 
 
 def fetch_all_rows() -> list[dict]:
-    """전체 데이터를 페이지네이션하며 모두 가져온다."""
     all_rows = []
-    start = 1
+    page_no = 1
+
     while True:
-        end = start + PAGE_SIZE - 1
-        data = fetch_page(start, end)
+        root = fetch_page(page_no)
+        items, total_count = parse_items(root)
 
-        service_data = data.get(SERVICE_ID)
-        if not service_data:
-            print("[경고] 응답에 서비스 데이터가 없습니다:", data)
+        if not items:
+            print(f"[안내] {page_no}페이지에 더 이상 데이터가 없습니다. 종료.")
             break
 
-        result_code = service_data.get("RESULT", {}).get("CODE")
-        if result_code and result_code != "INFO-000":
-            # INFO-200: 더 이상 데이터 없음(정상 종료), 그 외는 에러
-            if result_code == "INFO-200":
-                print("[안내] 더 이상 가져올 데이터가 없습니다. 종료.")
-            else:
-                print(f"[에러] API 응답 코드: {result_code} - {service_data.get('RESULT', {}).get('MESSAGE')}")
+        all_rows.extend(items)
+        print(f"[수집] {page_no}페이지 {len(items)}건 (누적 {len(all_rows)}/{total_count}건)")
+
+        if len(all_rows) >= total_count:
+            break
+        if MAX_PAGES and page_no >= MAX_PAGES:
+            print(f"[안내] 테스트 제한({MAX_PAGES}페이지)에 도달하여 종료합니다.")
             break
 
-        rows = service_data.get("row", [])
-        if not rows:
-            break
-
-        all_rows.extend(rows)
-        print(f"[진행] {start}~{end} 구간 {len(rows)}건 수집 (누적 {len(all_rows)}건)")
-
-        if len(rows) < PAGE_SIZE:
-            # 마지막 페이지
-            break
-
-        start += PAGE_SIZE
+        page_no += 1
+        time.sleep(REQUEST_DELAY_SEC)
 
     return all_rows
 
 
-def insert_rows(conn, rows: list[dict]) -> int:
-    """
-    가져온 원본 데이터를 foods 테이블에 적재.
-    실제 응답 필드명(FOOD_NM, MTRAL_NM 등)은 서비스 문서/실제 응답을 보고
-    아래 컬럼 매핑을 맞춰야 합니다. 우선 흔히 쓰이는 필드명으로 초안을 잡아둡니다.
-    """
+def load_allergen_lookup(conn):
+    """allergens, allergen_synonyms 테이블을 한 번만 읽어서 파이썬 dict로 캐싱."""
     cur = conn.cursor()
-    inserted = 0
-
-    for row in rows:
-        # TODO: 실제 응답 JSON의 키 이름으로 교체 필요 (예: row.get("FOOD_NM"))
-        food_name = row.get("FOOD_NM") or row.get("PRDLST_NM") or "이름없음"
-        raw_material = row.get("MTRAL_NM") or row.get("RAWMTRL_NM") or ""
-        manufacturer = row.get("BSSH_NM") or row.get("MANUFACTURER") or None
-        source_id = row.get("SEQ") or row.get("NUM") or None
-
-        cur.execute(
-            """
-            INSERT INTO foods (source_id, food_name, raw_material, manufacturer, synced_at)
-            VALUES (%s, %s, %s, %s, %s)
-            """,
-            (source_id, food_name, raw_material, manufacturer, datetime.now()),
-        )
-        inserted += 1
-
-    conn.commit()
-    cur.close()
-    return inserted
-
-
-def map_allergens(conn) -> int:
-    """
-    foods.raw_material 텍스트를 allergen_synonyms와 대조해서
-    food_allergen_map에 위험(원재료 직접 포함) 매핑을 채운다.
-    """
-    cur = conn.cursor()
+    cur.execute("SELECT allergen_id, name FROM allergens")
+    name_to_id = {name: allergen_id for allergen_id, name in cur.fetchall()}
 
     cur.execute("SELECT allergen_id, synonym FROM allergen_synonyms")
-    synonym_rows = cur.fetchall()  # [(allergen_id, synonym), ...]
-
-    cur.execute("SELECT food_id, raw_material FROM foods WHERE raw_material IS NOT NULL")
-    food_rows = cur.fetchall()
-
-    mapped = 0
-    for food_id, raw_material in food_rows:
-        if not raw_material:
-            continue
-        matched_allergen_ids = set()
-        for allergen_id, synonym in synonym_rows:
-            if synonym in raw_material:
-                matched_allergen_ids.add(allergen_id)
-
-        for allergen_id in matched_allergen_ids:
-            cur.execute(
-                """
-                INSERT INTO food_allergen_map (food_id, allergen_id, risk_level)
-                VALUES (%s, %s, '위험')
-                ON CONFLICT (food_id, allergen_id) DO NOTHING
-                """,
-                (food_id, allergen_id),
-            )
-            mapped += 1
-
-    conn.commit()
+    synonym_to_id = list(cur.fetchall())  # [(allergen_id, synonym), ...]
     cur.close()
-    return mapped
+    return name_to_id, synonym_to_id
+
+
+def build_food_records(rows: list[dict], name_to_id: dict, synonym_to_id: list):
+    """
+    수집한 rows를 (foods insert용 값, 매핑 계산용 allergen_id set) 리스트로 변환.
+    DB 왕복 없이 파이썬 메모리에서 전부 계산.
+    """
+    food_values = []
+    allergen_id_sets = []  # food_values와 같은 순서로 대응
+
+    for row in rows:
+        food_name = row.get("prdlstNm") or "이름없음"
+        raw_material = row.get("rawmtrl") or ""
+        manufacturer = row.get("manufacture")
+        source_id = row.get("prdlstReportNo")
+
+        food_values.append((source_id, food_name, raw_material, manufacturer, datetime.now()))
+
+        matched_ids = set()
+
+        # 1) allergy 필드 직접 매칭 (가장 신뢰도 높음)
+        allergy_text = row.get("allergy") or ""
+        if allergy_text.strip() not in ("없음", "해당없음", ""):
+            for name in [a.strip() for a in allergy_text.replace("함유", "").split(",") if a.strip()]:
+                if name in name_to_id:
+                    matched_ids.add(name_to_id[name])
+
+        # 2) 원재료 텍스트 보조 매칭 (동의어/오타 패턴 포함)
+        if raw_material:
+            for allergen_id, synonym in synonym_to_id:
+                if synonym in raw_material:
+                    matched_ids.add(allergen_id)
+
+        allergen_id_sets.append(matched_ids)
+
+    return food_values, allergen_id_sets
+
+
+def insert_foods_batch(conn, food_values: list[tuple]) -> list[int]:
+    """foods 테이블에 배치 INSERT 후, 생성된 food_id 리스트를 입력 순서 그대로 반환."""
+    cur = conn.cursor()
+    food_ids = []
+
+    for i in range(0, len(food_values), BATCH_SIZE):
+        chunk = food_values[i:i + BATCH_SIZE]
+        result = execute_values(
+            cur,
+            """
+            INSERT INTO foods (source_id, food_name, raw_material, manufacturer, synced_at)
+            VALUES %s
+            RETURNING food_id
+            """,
+            chunk,
+            fetch=True,
+        )
+        food_ids.extend([r[0] for r in result])
+        conn.commit()
+        print(f"[적재] foods {min(i + BATCH_SIZE, len(food_values))}/{len(food_values)}건")
+
+    cur.close()
+    return food_ids
+
+
+def insert_allergen_map_batch(conn, food_ids: list[int], allergen_id_sets: list[set]) -> int:
+    """food_allergen_map 테이블에 배치 INSERT."""
+    map_values = []
+    for food_id, allergen_ids in zip(food_ids, allergen_id_sets):
+        for allergen_id in allergen_ids:
+            map_values.append((food_id, allergen_id, "위험"))
+
+    if not map_values:
+        return 0
+
+    cur = conn.cursor()
+    total = 0
+    for i in range(0, len(map_values), BATCH_SIZE):
+        chunk = map_values[i:i + BATCH_SIZE]
+        execute_values(
+            cur,
+            """
+            INSERT INTO food_allergen_map (food_id, allergen_id, risk_level)
+            VALUES %s
+            ON CONFLICT (food_id, allergen_id) DO NOTHING
+            """,
+            chunk,
+        )
+        conn.commit()
+        total += len(chunk)
+        print(f"[적재] food_allergen_map {min(i + BATCH_SIZE, len(map_values))}/{len(map_values)}건")
+
+    cur.close()
+    return total
 
 
 def main():
@@ -151,23 +213,33 @@ def main():
     cur.close()
 
     try:
-        print("[시작] 식약처 API에서 데이터 수집 중...")
+        print("[시작] 공공데이터포털 HACCP API에서 데이터 수집 중...")
         rows = fetch_all_rows()
-        print(f"[완료] 총 {len(rows)}건 수집")
+        print(f"[완료] 총 {len(rows)}건 수집\n")
 
-        inserted = insert_rows(conn, rows)
-        print(f"[완료] {inserted}건 foods 테이블에 적재")
+        print("[준비] 알레르겐 테이블 캐싱 중...")
+        name_to_id, synonym_to_id = load_allergen_lookup(conn)
 
-        mapped = map_allergens(conn)
-        print(f"[완료] {mapped}건 알레르겐 매핑 생성")
+        print("[준비] 매칭 계산 중 (DB 왕복 없이 메모리에서 처리)...")
+        food_values, allergen_id_sets = build_food_records(rows, name_to_id, synonym_to_id)
+
+        print(f"\n[적재 시작] foods 테이블에 {len(food_values)}건 배치 INSERT...")
+        food_ids = insert_foods_batch(conn, food_values)
+        print(f"[완료] foods {len(food_ids)}건 적재\n")
+
+        print("[적재 시작] food_allergen_map 배치 INSERT...")
+        mapped = insert_allergen_map_batch(conn, food_ids, allergen_id_sets)
+        print(f"[완료] food_allergen_map {mapped}건 적재\n")
 
         cur = conn.cursor()
         cur.execute(
             "UPDATE sync_log SET finished_at=%s, status='SUCCESS', total_rows=%s WHERE sync_id=%s",
-            (datetime.now(), inserted, sync_id),
+            (datetime.now(), len(food_ids), sync_id),
         )
         conn.commit()
         cur.close()
+
+        print("=== 전체 동기화 완료 ===")
 
     except Exception as e:
         cur = conn.cursor()
