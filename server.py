@@ -5,6 +5,7 @@ import shutil
 import os
 
 from allergen_matcher import find_allergens_in_text
+from text_cleaner import clean_ocr_text_list
 
 app = FastAPI()
 
@@ -73,6 +74,7 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
             )
 
         ocr_text_list = [text for (bbox, text, confidence) in result]
+        ocr_text_list = clean_ocr_text_list(ocr_text_list)
 
         # 3-1. OCR이 텍스트를 아예 못 찾은 경우
         if not ocr_text_list:

@@ -1,5 +1,6 @@
 import easyocr
 from allergen_matcher import find_allergens_in_text
+from text_cleaner import clean_ocr_text_list
 
 print("EasyOCR 로딩 중...")
 reader = easyocr.Reader(['ko', 'en'])
@@ -9,6 +10,7 @@ image_path = "images/sample2.jpg"  # 본인 파일명 확인
 result = reader.readtext(image_path)
 
 ocr_text_list = [text for (bbox, text, confidence) in result if confidence > 0.02]
+ocr_text_list = clean_ocr_text_list(ocr_text_list)
 
 print("=== OCR로 추출한 텍스트 ===")
 for t in ocr_text_list:
