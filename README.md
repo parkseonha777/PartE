@@ -2,13 +2,6 @@
 - patibackroom@gamail.com
 
 ## API 명세 (백엔드 B - OCR 서버)
-
-## 서버 실행 방법
-\`\`\`bash
-uvicorn server:app --reload
-\`\`\`
-기본 주소: http://127.0.0.1:8000
-
 ## POST /scan
 성분표 이미지를 분석해서 알레르기 위험도를 반환합니다.
 
