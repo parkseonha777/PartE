@@ -15,6 +15,7 @@ v3: 알레르겐 마스터 데이터 보완 후 재실행용.
 """
 
 import os
+import sys
 import time
 import requests
 import psycopg2
@@ -22,6 +23,11 @@ from psycopg2.extras import execute_values
 import xml.etree.ElementTree as ET
 from datetime import datetime
 from dotenv import load_dotenv
+
+# Windows 콘솔/로그 파일에 한글이 깨지는 문제 방지 (기본 CP949 대신 UTF-8 강제)
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 load_dotenv()
 
@@ -79,13 +85,40 @@ def parse_items(root: ET.Element):
     return items, total_count
 
 
+def fetch_page_with_retry(page_no: int, expected_count: int, max_retries: int = 3) -> tuple[list, int]:
+    """
+    한 페이지를 가져오되, 예상보다 적게(API 순간 오류로) 받아오면 재시도.
+    반환: (items, total_count)
+    """
+    for attempt in range(1, max_retries + 1):
+        root = fetch_page(page_no)
+        items, total_count = parse_items(root)
+
+        if len(items) >= expected_count or len(items) == 0:
+            # 정상(예상 개수 이상 받음) 또는 진짜 마지막 페이지(0건)
+            return items, total_count
+
+        print(f"[재시도] {page_no}페이지가 {len(items)}건만 수신됨 "
+              f"(예상 {expected_count}건). {attempt}/{max_retries}번째 재시도...")
+        time.sleep(1.0)
+
+    print(f"[경고] {page_no}페이지를 {max_retries}번 재시도해도 부족하게 수신됨. "
+          f"받은 만큼({len(items)}건)만 사용하고 계속 진행합니다.")
+    return items, total_count
+
+
 def fetch_all_rows() -> list[dict]:
     all_rows = []
     page_no = 1
+    total_count = None
 
     while True:
-        root = fetch_page(page_no)
-        items, total_count = parse_items(root)
+        expected_this_page = NUM_OF_ROWS
+        if total_count is not None:
+            remaining = total_count - len(all_rows)
+            expected_this_page = min(NUM_OF_ROWS, remaining)
+
+        items, total_count = fetch_page_with_retry(page_no, expected_this_page)
 
         if not items:
             print(f"[안내] {page_no}페이지에 더 이상 데이터가 없습니다. 종료.")
@@ -151,6 +184,19 @@ def build_food_records(rows: list[dict], name_to_id: dict, synonym_to_id: list):
         allergen_id_sets.append(matched_ids)
 
     return food_values, allergen_id_sets
+
+
+def truncate_old_data(conn):
+    """
+    재실행 시 데이터가 중복 누적되는 걸 막기 위해,
+    foods / food_allergen_map만 비우고 다시 채운다.
+    (allergens, allergen_synonyms, sync_log는 건드리지 않음)
+    """
+    cur = conn.cursor()
+    cur.execute("TRUNCATE TABLE food_allergen_map, foods RESTART IDENTITY CASCADE")
+    conn.commit()
+    cur.close()
+    print("[정리] 기존 foods / food_allergen_map 데이터 비움 (중복 방지)")
 
 
 def insert_foods_batch(conn, food_values: list[tuple]) -> list[int]:
@@ -231,6 +277,8 @@ def main():
 
         print("[준비] 매칭 계산 중 (DB 왕복 없이 메모리에서 처리)...")
         food_values, allergen_id_sets = build_food_records(rows, name_to_id, synonym_to_id)
+
+        truncate_old_data(conn)
 
         print(f"\n[적재 시작] foods 테이블에 {len(food_values)}건 배치 INSERT...")
         food_ids = insert_foods_batch(conn, food_values)
