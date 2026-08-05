@@ -6,9 +6,12 @@
 
 실행: python db/sync_foodsafety.py
 
-v2: 배치(묶음) INSERT로 속도 개선.
-    - 기존: 14,672건을 한 건씩 INSERT (왕복 14,672번 이상) -> 매우 느림
-    - 개선: execute_values로 한 번에 수백~수천 건씩 묶어서 INSERT -> 왕복 수십 번 수준
+v3: 알레르겐 마스터 데이터 보완 후 재실행용.
+    - "알수없음", "해당사항없음" 등 무의미한 allergy 값을 무시하도록 목록 보강
+    - 배치(묶음) INSERT 유지 (v2와 동일한 속도)
+
+주의: 이 스크립트를 실행하기 전에 반드시 db/update_allergens.sql을
+      먼저 Supabase SQL Editor에서 실행해서 알레르겐 마스터 데이터부터 보완할 것.
 """
 
 import os
@@ -29,7 +32,15 @@ BASE_URL = "https://apis.data.go.kr/B553748/CertImgListServiceV3/getCertImgListS
 NUM_OF_ROWS = 100
 MAX_PAGES = None
 REQUEST_DELAY_SEC = 0.3
-BATCH_SIZE = 1000  # 한 번에 DB에 넣을 묶음 크기
+BATCH_SIZE = 1000
+
+# allergy 필드에 이런 값이 오면 "알레르겐 없음"으로 취급하고 무시
+IGNORE_ALLERGY_VALUES = {
+    "", "없음", "해당없음", "해당사항없음",
+    "알수없음", "알 수 없음", "일수없음",
+    ".", "이상 없음.", "없음.",
+    "알러지유발식품없음", "알레르기 유발제품",
+}
 
 
 def fetch_page(page_no: int) -> ET.Element:
@@ -96,24 +107,19 @@ def fetch_all_rows() -> list[dict]:
 
 
 def load_allergen_lookup(conn):
-    """allergens, allergen_synonyms 테이블을 한 번만 읽어서 파이썬 dict로 캐싱."""
     cur = conn.cursor()
     cur.execute("SELECT allergen_id, name FROM allergens")
     name_to_id = {name: allergen_id for allergen_id, name in cur.fetchall()}
 
     cur.execute("SELECT allergen_id, synonym FROM allergen_synonyms")
-    synonym_to_id = list(cur.fetchall())  # [(allergen_id, synonym), ...]
+    synonym_to_id = list(cur.fetchall())
     cur.close()
     return name_to_id, synonym_to_id
 
 
 def build_food_records(rows: list[dict], name_to_id: dict, synonym_to_id: list):
-    """
-    수집한 rows를 (foods insert용 값, 매핑 계산용 allergen_id set) 리스트로 변환.
-    DB 왕복 없이 파이썬 메모리에서 전부 계산.
-    """
     food_values = []
-    allergen_id_sets = []  # food_values와 같은 순서로 대응
+    allergen_id_sets = []
 
     for row in rows:
         food_name = row.get("prdlstNm") or "이름없음"
@@ -125,11 +131,15 @@ def build_food_records(rows: list[dict], name_to_id: dict, synonym_to_id: list):
 
         matched_ids = set()
 
-        # 1) allergy 필드 직접 매칭 (가장 신뢰도 높음)
-        allergy_text = row.get("allergy") or ""
-        if allergy_text.strip() not in ("없음", "해당없음", ""):
+        # 1) allergy 필드 직접 매칭
+        allergy_text = (row.get("allergy") or "").strip()
+        if allergy_text not in IGNORE_ALLERGY_VALUES:
             for name in [a.strip() for a in allergy_text.replace("함유", "").split(",") if a.strip()]:
-                if name in name_to_id:
+                # 괄호 안 부가설명 제거 시도 (예: "조개류(굴)" -> "조개류")
+                base_name = name.split("(")[0].strip()
+                if base_name in name_to_id:
+                    matched_ids.add(name_to_id[base_name])
+                elif name in name_to_id:
                     matched_ids.add(name_to_id[name])
 
         # 2) 원재료 텍스트 보조 매칭 (동의어/오타 패턴 포함)
@@ -144,7 +154,6 @@ def build_food_records(rows: list[dict], name_to_id: dict, synonym_to_id: list):
 
 
 def insert_foods_batch(conn, food_values: list[tuple]) -> list[int]:
-    """foods 테이블에 배치 INSERT 후, 생성된 food_id 리스트를 입력 순서 그대로 반환."""
     cur = conn.cursor()
     food_ids = []
 
@@ -169,7 +178,6 @@ def insert_foods_batch(conn, food_values: list[tuple]) -> list[int]:
 
 
 def insert_allergen_map_batch(conn, food_ids: list[int], allergen_id_sets: list[set]) -> int:
-    """food_allergen_map 테이블에 배치 INSERT."""
     map_values = []
     for food_id, allergen_ids in zip(food_ids, allergen_id_sets):
         for allergen_id in allergen_ids:
@@ -219,6 +227,7 @@ def main():
 
         print("[준비] 알레르겐 테이블 캐싱 중...")
         name_to_id, synonym_to_id = load_allergen_lookup(conn)
+        print(f"[준비] 알레르겐 {len(name_to_id)}개, 동의어 {len(synonym_to_id)}개 로드 완료")
 
         print("[준비] 매칭 계산 중 (DB 왕복 없이 메모리에서 처리)...")
         food_values, allergen_id_sets = build_food_records(rows, name_to_id, synonym_to_id)
