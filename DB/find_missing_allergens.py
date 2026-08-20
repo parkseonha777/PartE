@@ -10,12 +10,18 @@
 """
 
 import os
+import sys
 import time
 from collections import Counter
 import requests
 import psycopg2
 import xml.etree.ElementTree as ET
 from dotenv import load_dotenv
+
+# Windows 콘솔/로그 파일에 한글이 깨지는 문제 방지 (기본 CP949 대신 UTF-8 강제)
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
 
 load_dotenv()
 
