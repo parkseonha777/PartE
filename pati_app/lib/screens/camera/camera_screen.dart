@@ -1,6 +1,15 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:http/http.dart' as http;
 import '../scan_result/scan_result_screen.dart';
+
+// TODO(프론트엔드): 실제 서버 배포 주소로 교체 필요.
+// - 컴퓨터에서 Flutter 웹/데스크톱으로 테스트: http://127.0.0.1:8000
+// - 안드로이드 에뮬레이터에서 테스트: http://10.0.2.2:8000  (127.0.0.1은 에뮬레이터 자기 자신을 가리켜서 안 됨)
+// - 실제 폰(같은 와이파이)에서 테스트: http://<컴퓨터의 로컬 IP>:8000  (예: 192.168.0.5:8000)
+// - 나중에 서버를 실제로 배포하면 그 도메인/IP로 교체
+const String kServerBaseUrl = "http://127.0.0.1:8000";
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -44,6 +53,14 @@ class _CameraScreenState extends State<CameraScreen> {
     super.dispose();
   }
 
+  // TODO(프론트엔드): allergy_profile_screen에서 저장한 사용자 알레르기 목록을
+  // 실제로 가져오도록 교체 필요. (예: SharedPreferences, Provider, Riverpod 등
+  // 프로젝트에서 쓰는 상태관리 방식에 맞게)
+  // 지금은 임시로 하드코딩된 값을 사용함.
+  List<String> _getUserAllergens() {
+    return ["난류", "우유", "새우"]; // 임시값 - 실제 사용자 설정으로 교체 필요
+  }
+
   Future<void> _captureAndAnalyze() async {
     if (_controller == null || !_controller!.value.isInitialized) return;
 
@@ -51,16 +68,46 @@ class _CameraScreenState extends State<CameraScreen> {
 
     try {
       final image = await _controller!.takePicture();
+      final userAllergens = _getUserAllergens();
 
-      // 잠시 로딩 후 결과 화면으로 이동 (실제 API 연동은 Step 5에서)
-      await Future.delayed(const Duration(seconds: 2));
+      // ---- 서버로 이미지 + 알레르기 목록 전송 ----
+      final uri = Uri.parse("$kServerBaseUrl/scan");
+      final request = http.MultipartRequest('POST', uri);
+
+      request.files.add(
+        await http.MultipartFile.fromPath('file', image.path),
+      );
+      request.fields['allergens'] = userAllergens.join(',');
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+
+      if (response.statusCode != 200) {
+        // 서버가 에러를 반환한 경우 (400, 422, 500 등)
+        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+        throw Exception(errorBody['detail'] ?? '분석 중 오류가 발생했습니다.');
+      }
+
+      final result = jsonDecode(utf8.decode(response.bodyBytes));
+      // result 형태: {"위험": [...], "주의": [...], "안전": [...]}
 
       if (mounted) {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ScanResultScreen(imagePath: image.path),
+            builder: (context) => ScanResultScreen(
+              imagePath: image.path,
+              // TODO(프론트엔드): ScanResultScreen이 이 결과를 받아서
+              // 위험/주의/안전 목록을 화면에 표시하도록 파라미터 추가 필요.
+              scanResult: result,
+            ),
           ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('분석 실패: $e')),
         );
       }
     } finally {
@@ -149,10 +196,10 @@ class _CameraScreenState extends State<CameraScreen> {
                     ),
                     child: const Icon(Icons.camera_alt,
                         color: Colors.white, size: 32),
-                    ),
                   ),
                 ),
               ),
+            ),
         ],
       ),
     );

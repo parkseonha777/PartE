@@ -3,16 +3,38 @@ import '../alternative/alternative_screen.dart';
 
 class ScanResultScreen extends StatelessWidget {
   final String imagePath;
-  const ScanResultScreen({super.key, required this.imagePath});
 
-  // 임시 Mock 데이터 (Step 5에서 실제 API로 교체)
-  final List<Map<String, dynamic>> _mockIngredients = const [
-    {'name': '계란', 'level': 'danger'},
-    {'name': '우유', 'level': 'danger'},
-    {'name': '밀', 'level': 'caution'},
-    {'name': '설탕', 'level': 'safe'},
-    {'name': '소금', 'level': 'safe'},
-  ];
+  // 서버 /scan 응답 형태: {"위험": [...], "주의": [...], "안전": [...]}
+  // 각 값은 알레르겐 이름(예: "난류", "우유") 문자열 리스트
+  final Map<String, dynamic> scanResult;
+
+  const ScanResultScreen({
+    super.key,
+    required this.imagePath,
+    required this.scanResult,
+  });
+
+  // 서버 응답({"위험":[...], "주의":[...], "안전":[...]})을
+  // 기존 UI가 쓰던 형태([{'name':..., 'level':...}, ...])로 변환
+  List<Map<String, dynamic>> get _ingredients {
+    final List<Map<String, dynamic>> result = [];
+
+    final dangerNames = List<String>.from(scanResult['위험'] ?? []);
+    final cautionNames = List<String>.from(scanResult['주의'] ?? []);
+    final safeNames = List<String>.from(scanResult['안전'] ?? []);
+
+    for (final name in dangerNames) {
+      result.add({'name': name, 'level': 'danger'});
+    }
+    for (final name in cautionNames) {
+      result.add({'name': name, 'level': 'caution'});
+    }
+    for (final name in safeNames) {
+      result.add({'name': name, 'level': 'safe'});
+    }
+
+    return result;
+  }
 
   Color _getRiskColor(String level) {
     switch (level) {
@@ -55,12 +77,13 @@ class ScanResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ingredients = _ingredients;
     final dangerList =
-        _mockIngredients.where((e) => e['level'] == 'danger').toList();
+        ingredients.where((e) => e['level'] == 'danger').toList();
     final cautionList =
-        _mockIngredients.where((e) => e['level'] == 'caution').toList();
+        ingredients.where((e) => e['level'] == 'caution').toList();
     final safeList =
-        _mockIngredients.where((e) => e['level'] == 'safe').toList();
+        ingredients.where((e) => e['level'] == 'safe').toList();
     final sortedList = [...dangerList, ...cautionList, ...safeList];
 
     return Scaffold(
@@ -90,91 +113,103 @@ class ScanResultScreen extends StatelessWidget {
                   size: 32,
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  dangerList.isNotEmpty
-                      ? '⚠️ 위험 성분 ${dangerList.length}개 발견!'
-                      : '✅ 안전한 식품입니다!',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color:
-                        dangerList.isNotEmpty ? Colors.red : Colors.green,
+                Expanded(
+                  child: Text(
+                    dangerList.isNotEmpty
+                        ? '⚠️ 위험 성분 ${dangerList.length}개 발견!'
+                        : '✅ 안전한 식품입니다!',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color:
+                          dangerList.isNotEmpty ? Colors.red : Colors.green,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // 성분 리스트
+          // 성분 리스트 (결과가 하나도 없는 경우 대비)
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: sortedList.length,
-              itemBuilder: (context, index) {
-                final item = sortedList[index];
-                final color = _getRiskColor(item['level']);
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: color, width: 1.5),
-                  ),
-                  child: ListTile(
-                    leading: Icon(_getRiskIcon(item['level']),
-                        color: color, size: 32),
-                    title: Text(item['name'],
-                        style: const TextStyle(
-                            fontSize: 16, fontWeight: FontWeight.bold)),
-                    trailing: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: color,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _getRiskLabel(item['level']),
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
+            child: sortedList.isEmpty
+                ? const Center(
+                    child: Text(
+                      '등록된 알레르기 항목과 일치하는 성분이 없습니다.',
+                      style: TextStyle(fontSize: 15, color: Colors.grey),
                     ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: sortedList.length,
+                    itemBuilder: (context, index) {
+                      final item = sortedList[index];
+                      final color = _getRiskColor(item['level']);
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(color: color, width: 1.5),
+                        ),
+                        child: ListTile(
+                          leading: Icon(_getRiskIcon(item['level']),
+                              color: color, size: 32),
+                          title: Text(item['name'],
+                              style: const TextStyle(
+                                  fontSize: 16, fontWeight: FontWeight.bold)),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              _getRiskLabel(item['level']),
+                              style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
 
-          // 대체 식품 보기 버튼
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                     MaterialPageRoute(
-                      builder: (context) => const AlternativeScreen(
-                        dangerIngredient: '계란',
-                      ),
+          // 대체 식품 보기 버튼 (위험 성분이 있을 때만 표시)
+          if (dangerList.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE53935),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.swap_horiz),
-                label: const Text('대체 식품 보기',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AlternativeScreen(
+                          // 첫 번째 위험 성분을 기준으로 대체 식품 안내
+                          dangerIngredient: dangerList.first['name'],
+                        ),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.swap_horiz),
+                  label: const Text('대체 식품 보기',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
