@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import easyocr
 import shutil
 import os
-from PIL import Image
+from PIL import Image, ImageOps
 
 from allergen_matcher import find_allergens_in_text
 from text_cleaner import clean_ocr_text_list
@@ -74,6 +74,12 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
         # Pillow로 한 번 열어서 다시 표준 JPEG로 저장하면 대부분 해결됨.
         try:
             with Image.open(temp_path) as img:
+                # 카메라로 찍은 사진에는 EXIF 방향(Orientation) 정보가 들어있는 경우가 많음.
+                # 이 정보를 무시하고 그냥 저장하면 사진이 옆으로 돌아간 채로 저장되어
+                # OCR이 텍스트를 전혀 인식하지 못하는 문제가 생김.
+                # exif_transpose로 실제 보이는 방향대로 픽셀을 바로잡은 뒤 저장.
+                img = ImageOps.exif_transpose(img)
+
                 # 일부 이미지는 RGBA/팔레트 모드라 JPEG로 바로 저장 안 될 수 있어 RGB로 변환
                 if img.mode != "RGB":
                     img = img.convert("RGB")
