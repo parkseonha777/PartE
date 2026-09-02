@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import easyocr
 import shutil
 import os
+from PIL import Image
 
 from allergen_matcher import find_allergens_in_text
 from text_cleaner import clean_ocr_text_list
@@ -56,6 +57,8 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
 
     # ---- 2. 파일 저장 ----
     temp_path = f"temp_{file.filename}"
+    normalized_path = f"temp_normalized_{file.filename}.jpg"
+
     try:
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
@@ -64,9 +67,26 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
         if os.path.getsize(temp_path) == 0:
             raise HTTPException(status_code=400, detail="업로드된 파일이 비어있습니다.")
 
-        # ---- 3. OCR 실행 ----
+        # ---- 2-1. 이미지 재인코딩 (기종별 JPEG 호환성 문제 해결) ----
+        # 일부 안드로이드 기종(예: 삼성 갤럭시)의 카메라 앱이 만드는 JPEG가
+        # 표준과 다른 방식(비정상 SOS 마커 등)으로 인코딩되어 있어
+        # OCR/이미지 처리 라이브러리가 직접 못 읽는 경우가 있음.
+        # Pillow로 한 번 열어서 다시 표준 JPEG로 저장하면 대부분 해결됨.
         try:
-            result = reader.readtext(temp_path)
+            with Image.open(temp_path) as img:
+                # 일부 이미지는 RGBA/팔레트 모드라 JPEG로 바로 저장 안 될 수 있어 RGB로 변환
+                if img.mode != "RGB":
+                    img = img.convert("RGB")
+                img.save(normalized_path, "JPEG", quality=95)
+        except Exception as e:
+            raise HTTPException(
+                status_code=422,
+                detail="이미지 파일을 열 수 없습니다. 손상되었거나 지원하지 않는 이미지 형식일 수 있습니다."
+            )
+
+        # ---- 3. OCR 실행 (재인코딩된 이미지 사용) ----
+        try:
+            result = reader.readtext(normalized_path)
         except Exception as e:
             raise HTTPException(
                 status_code=422,
@@ -101,3 +121,5 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
         # 임시 파일은 성공하든 실패하든 반드시 삭제
         if os.path.exists(temp_path):
             os.remove(temp_path)
+        if os.path.exists(normalized_path):
+            os.remove(normalized_path)
