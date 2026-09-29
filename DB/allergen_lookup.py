@@ -1,19 +1,11 @@
 """
-Supabase(PostgreSQL)에 저장된 알레르겐/동의어 데이터를,
-allergen_matcher.py가 쓰던 것과 같은 형태(ALLERGEN_DB 딕셔너리)로
-가져오는 모듈.
+Supabase(PostgreSQL)에 저장된 알레르겐/동의어/식품 데이터를 조회하는 모듈.
 
 담당: 백엔드 A (데이터/DB)
-용도: 백엔드 B(OCR 담당)가 원래 하드코딩해서 쓰던 ALLERGEN_DB 대신,
-      이 모듈의 get_allergen_db()를 호출해서 항상 최신 DB 데이터를 쓸 수 있게 함.
-
-사용 예시 (백엔드 B 쪽 코드):
-
-    from db.allergen_lookup import get_allergen_db
-
-    ALLERGEN_DB = get_allergen_db()   # 기존 하드코딩 딕셔너리 대신 이거 사용
-    # 이후 allergen_matcher.py의 contains_allergen(), find_allergens_in_text() 등은
-    # 그대로 사용 가능 (ALLERGEN_DB 형태가 동일하므로)
+용도:
+  - get_allergen_db(): OCR 매칭 로직(allergen_matcher.py)이 쓰는 ALLERGEN_DB 딕셔너리 형태로 반환
+  - find_food_by_name(): 제품명으로 이미 DB에 있는 식품인지 검색
+  - get_alternatives(): 특정 알레르겐이 없는 식품을 추천 (대체 식품 화면용)
 """
 
 import os
@@ -28,14 +20,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 def get_allergen_db() -> dict:
     """
     Supabase에서 allergens + allergen_synonyms를 읽어와서
-    기존 allergen_matcher.py의 ALLERGEN_DB와 동일한 형태로 반환.
-
-    반환 형태 예시:
-    {
-        "난류": ["난류", "계란", "전란", "난백", "난황", ...],
-        "우유": ["우유", "분유", "유청", ...],
-        ...
-    }
+    allergen_matcher.py의 ALLERGEN_DB와 동일한 형태로 반환.
     """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL이 .env에 설정되어 있지 않습니다.")
@@ -62,18 +47,12 @@ def get_allergen_db() -> dict:
 
 
 def get_allergen_names() -> list[str]:
-    """알레르겐 이름 목록만 필요할 때 (예: 사용자 알레르기 선택 UI 드롭다운용)"""
+    """알레르겐 이름 목록만 필요할 때"""
     return list(get_allergen_db().keys())
 
 
 def find_food_by_name(food_name: str, limit: int = 5) -> list[dict]:
-    """
-    제품명으로 이미 DB에 있는 식품인지 검색.
-    OCR 없이 제품명만으로 원재료/알레르겐 정보를 바로 찾을 수 있으면
-    OCR 단계를 건너뛰어 속도를 높일 수 있음 (선택적 최적화).
-
-    반환: [{"food_id": 1, "food_name": "...", "raw_material": "...", "allergens": ["난류", "우유"]}, ...]
-    """
+    """제품명으로 DB에 있는 식품 검색."""
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL이 .env에 설정되어 있지 않습니다.")
 
@@ -108,8 +87,39 @@ def find_food_by_name(food_name: str, limit: int = 5) -> list[dict]:
     ]
 
 
+def get_alternatives(allergen_name: str, limit: int = 5) -> list[str]:
+    """
+    지정한 알레르겐이 포함되지 않은 식품명을 무작위로 추천.
+    (현재는 카테고리 구분 없이 전체 DB에서 검색 — 추후 식품 유형(prdkind) 필드를
+    추가하면 같은 카테고리 내에서만 추천하도록 개선 가능)
+    """
+    if not DATABASE_URL:
+        raise RuntimeError("DATABASE_URL이 .env에 설정되어 있지 않습니다.")
+
+    conn = psycopg2.connect(DATABASE_URL)
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        SELECT food_name FROM foods
+        WHERE food_id NOT IN (
+            SELECT fam.food_id FROM food_allergen_map fam
+            JOIN allergens a ON fam.allergen_id = a.allergen_id
+            WHERE a.name = %s
+        )
+        ORDER BY RANDOM()
+        LIMIT %s
+        """,
+        (allergen_name, limit),
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return [r[0] for r in rows]
+
+
 if __name__ == "__main__":
-    # 간단한 동작 테스트용 (python db/allergen_lookup.py 로 직접 실행 가능)
     db = get_allergen_db()
     print(f"알레르겐 {len(db)}개 로드됨\n")
     for name, synonyms in db.items():

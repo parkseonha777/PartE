@@ -1,6 +1,9 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import '../camera/camera_screen.dart' show kServerBaseUrl;
 
-class AlternativeScreen extends StatelessWidget {
+class AlternativeScreen extends StatefulWidget {
   final String dangerIngredient;
 
   const AlternativeScreen({
@@ -8,34 +11,52 @@ class AlternativeScreen extends StatelessWidget {
     required this.dangerIngredient,
   });
 
-  // 임시 Mock 데이터 (Step 5에서 실제 API로 교체)
-  List<Map<String, dynamic>> _getAlternatives() {
-    return [
-      {
-        'name': '오트밀크',
-        'category': '우유 대체',
-        'description': '식물성 음료로 우유 알레르기가 있는 분께 적합해요',
-        'safeLevel': 'safe',
-      },
-      {
-        'name': '아몬드밀크',
-        'category': '우유 대체',
-        'description': '고소한 맛의 식물성 음료예요',
-        'safeLevel': 'safe',
-      },
-      {
-        'name': '두유',
-        'category': '우유 대체',
-        'description': '단백질이 풍부한 식물성 음료예요',
-        'safeLevel': 'caution',
-      },
-    ];
+  @override
+  State<AlternativeScreen> createState() => _AlternativeScreenState();
+}
+
+class _AlternativeScreenState extends State<AlternativeScreen> {
+  bool _isLoading = true;
+  String? _error;
+  List<String> _alternatives = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchAlternatives();
+  }
+
+  Future<void> _fetchAlternatives() async {
+    try {
+      final uri = Uri.parse(
+        "$kServerBaseUrl/alternatives?allergen=${Uri.encodeComponent(widget.dangerIngredient)}&limit=5",
+      );
+      final response = await http.get(uri);
+
+      if (response.statusCode != 200) {
+        throw Exception('서버 오류 (${response.statusCode})');
+      }
+
+      final data = jsonDecode(utf8.decode(response.bodyBytes));
+
+      if (mounted) {
+        setState(() {
+          _alternatives = List<String>.from(data['alternatives'] ?? []);
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = '대체 식품을 불러오지 못했습니다.\n($e)';
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final alternatives = _getAlternatives();
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -56,10 +77,12 @@ class AlternativeScreen extends StatelessWidget {
                 const Icon(Icons.swap_horiz,
                     color: Color(0xFFE53935), size: 28),
                 const SizedBox(width: 12),
-                Text(
-                  '"$dangerIngredient" 대신 드실 수 있어요',
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+                Expanded(
+                  child: Text(
+                    '"${widget.dangerIngredient}"이(가) 없는 식품이에요',
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -67,93 +90,80 @@ class AlternativeScreen extends StatelessWidget {
 
           // 대체 식품 리스트
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: alternatives.length,
-              itemBuilder: (context, index) {
-                final item = alternatives[index];
-                final isSafe = item['safeLevel'] == 'safe';
-                return Card(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(
-                      color: isSafe ? Colors.green : Colors.amber,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        // 아이콘
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: isSafe
-                                ? Colors.green[50]
-                                : Colors.amber[50],
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            Icons.restaurant,
-                            color: isSafe ? Colors.green : Colors.amber,
-                            size: 28,
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(
+                        color: Color(0xFFE53935)))
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            _error!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(color: Colors.grey),
                           ),
                         ),
-                        const SizedBox(width: 16),
-
-                        // 내용
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Text(item['name'],
-                                      style: const TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold)),
-                                  const SizedBox(width: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: isSafe
-                                          ? Colors.green
-                                          : Colors.amber,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      isSafe ? '안전' : '주의',
-                                      style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.bold),
-                                    ),
+                      )
+                    : _alternatives.isEmpty
+                        ? const Center(
+                            child: Text('추천할 대체 식품을 찾지 못했습니다.'))
+                        : ListView.builder(
+                            padding: const EdgeInsets.all(16),
+                            itemCount: _alternatives.length,
+                            itemBuilder: (context, index) {
+                              final name = _alternatives[index];
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: const BorderSide(
+                                      color: Colors.green, width: 1.5),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 50,
+                                        height: 50,
+                                        decoration: BoxDecoration(
+                                          color: Colors.green[50],
+                                          borderRadius:
+                                              BorderRadius.circular(10),
+                                        ),
+                                        child: const Icon(Icons.restaurant,
+                                            color: Colors.green, size: 28),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(name,
+                                                style: const TextStyle(
+                                                    fontSize: 16,
+                                                    fontWeight:
+                                                        FontWeight.bold)),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '"${widget.dangerIngredient}" 미포함',
+                                              style: const TextStyle(
+                                                  color: Colors.green,
+                                                  fontSize: 12,
+                                                  fontWeight:
+                                                      FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                              const SizedBox(height: 4),
-                              Text(item['category'],
-                                  style: const TextStyle(
-                                      color: Color(0xFFE53935),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold)),
-                              const SizedBox(height: 4),
-                              Text(item['description'],
-                                  style: const TextStyle(
-                                      color: Colors.grey, fontSize: 13)),
-                            ],
+                                ),
+                              );
+                            },
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
           ),
         ],
       ),

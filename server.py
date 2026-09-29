@@ -7,6 +7,7 @@ from PIL import Image, ImageOps
 
 from allergen_matcher import find_allergens_in_text
 from text_cleaner import clean_ocr_text_list
+from DB.allergen_lookup import get_alternatives
 
 app = FastAPI()
 
@@ -39,7 +40,6 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
 
     # ---- 1. 입력값 검증 ----
 
-    # 1-1. 파일 확장자 확인
     ext = os.path.splitext(file.filename)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -47,7 +47,6 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
             detail=f"지원하지 않는 파일 형식입니다 ({ext}). jpg, jpeg, png, webp 파일만 업로드해주세요."
         )
 
-    # 1-2. 알레르기 항목이 비어있는지 확인
     user_allergens = [a.strip() for a in allergens.split(",") if a.strip()]
     if not user_allergens:
         raise HTTPException(
@@ -56,35 +55,33 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
         )
 
     # ---- 2. 파일 저장 ----
-    temp_path = f"temp_{file.filename}"
-    normalized_path = f"temp_normalized_{file.filename}.jpg"
+    # 원본 파일명을 그대로 쓰면 한글 등 비ASCII 문자가 섞여 있을 때
+    # 인코딩이 깨져서 파일을 못 여는 문제가 생길 수 있음.
+    # 확장자만 유지하고, 이름 자체는 안전한 UUID로 교체.
+    import uuid
+    safe_ext = ext if ext else ".jpg"
+    temp_path = f"temp_{uuid.uuid4().hex}{safe_ext}"
+    normalized_path = f"temp_normalized_{uuid.uuid4().hex}.jpg"
 
     try:
         with open(temp_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # 파일이 실제로 비어있지 않은지 확인
         if os.path.getsize(temp_path) == 0:
             raise HTTPException(status_code=400, detail="업로드된 파일이 비어있습니다.")
 
-        # ---- 2-1. 이미지 재인코딩 (기종별 JPEG 호환성 문제 해결) ----
-        # 일부 안드로이드 기종(예: 삼성 갤럭시)의 카메라 앱이 만드는 JPEG가
-        # 표준과 다른 방식(비정상 SOS 마커 등)으로 인코딩되어 있어
-        # OCR/이미지 처리 라이브러리가 직접 못 읽는 경우가 있음.
-        # Pillow로 한 번 열어서 다시 표준 JPEG로 저장하면 대부분 해결됨.
+        # ---- 2-1. 이미지 재인코딩 (기종별 JPEG 호환성 + EXIF 방향 문제 해결) ----
         try:
             with Image.open(temp_path) as img:
-                # 카메라로 찍은 사진에는 EXIF 방향(Orientation) 정보가 들어있는 경우가 많음.
-                # 이 정보를 무시하고 그냥 저장하면 사진이 옆으로 돌아간 채로 저장되어
-                # OCR이 텍스트를 전혀 인식하지 못하는 문제가 생김.
-                # exif_transpose로 실제 보이는 방향대로 픽셀을 바로잡은 뒤 저장.
+                # 카메라로 찍은 사진의 EXIF 방향 정보를 반영해 픽셀을 바로잡음.
+                # 이걸 안 하면 사진이 옆으로 돌아간 채로 저장되어 OCR이 텍스트를
+                # 전혀 인식하지 못하는 문제가 생김.
                 img = ImageOps.exif_transpose(img)
 
-                # 일부 이미지는 RGBA/팔레트 모드라 JPEG로 바로 저장 안 될 수 있어 RGB로 변환
                 if img.mode != "RGB":
                     img = img.convert("RGB")
                 img.save(normalized_path, "JPEG", quality=95)
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=422,
                 detail="이미지 파일을 열 수 없습니다. 손상되었거나 지원하지 않는 이미지 형식일 수 있습니다."
@@ -93,16 +90,15 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
         # ---- 3. OCR 실행 (재인코딩된 이미지 사용) ----
         try:
             result = reader.readtext(normalized_path)
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=422,
-                detail=f"이미지를 읽는 중 문제가 발생했습니다. 손상되었거나 지원하지 않는 이미지일 수 있습니다."
+                detail="이미지를 읽는 중 문제가 발생했습니다. 손상되었거나 지원하지 않는 이미지일 수 있습니다."
             )
 
         ocr_text_list = [text for (bbox, text, confidence) in result]
         ocr_text_list = clean_ocr_text_list(ocr_text_list)
 
-        # 3-1. OCR이 텍스트를 아예 못 찾은 경우
         if not ocr_text_list:
             raise HTTPException(
                 status_code=422,
@@ -115,17 +111,33 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
         return match_result
 
     except HTTPException:
-        # 이미 처리된 HTTPException은 그대로 다시 던짐
         raise
     except Exception as e:
-        # 예상 못한 에러는 500으로 처리하되, 서버가 죽지 않고 메시지 반환
         raise HTTPException(
             status_code=500,
             detail=f"서버 내부 오류가 발생했습니다: {str(e)}"
         )
     finally:
-        # 임시 파일은 성공하든 실패하든 반드시 삭제
         if os.path.exists(temp_path):
             os.remove(temp_path)
         if os.path.exists(normalized_path):
             os.remove(normalized_path)
+
+
+@app.get("/alternatives")
+async def alternatives(allergen: str, limit: int = 5):
+    """
+    allergen: 위험으로 판정된 알레르겐 이름 (예: "우유")
+    limit: 추천받을 최대 개수 (기본 5개)
+
+    해당 알레르겐이 포함되지 않은 식품을 DB에서 조회해 반환.
+    """
+    try:
+        items = get_alternatives(allergen, limit)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"대체 식품 조회 중 오류가 발생했습니다: {str(e)}"
+        )
+
+    return {"allergen": allergen, "alternatives": items}

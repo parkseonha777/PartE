@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../main.dart' show supabase;
 import 'signup_screen.dart';
 import '../profile/allergy_profile_screen.dart';
+import '../scan_guide/scan_guide_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -21,42 +25,93 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _login() {
-  final email = _emailController.text.trim();
-  final password = _passwordController.text.trim();
+  Future<void> _login() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
 
-  // 빈 칸 체크
-  if (email.isEmpty || password.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('이메일과 비밀번호를 입력해주세요')),
-    );
-    return;
+    // 빈 칸 체크
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('이메일과 비밀번호를 입력해주세요')),
+      );
+      return;
+    }
+
+    // 이메일 형식 체크
+    if (!email.contains('@')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('올바른 이메일 형식을 입력해주세요')),
+      );
+      return;
+    }
+
+    // 비밀번호 길이 체크
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('비밀번호는 6자리 이상 입력해주세요')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      await supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      // 이미 알레르기 프로필을 설정한 사용자면 바로 스캔 화면으로,
+      // 처음이면 알레르기 프로필 설정 화면으로 이동
+      bool hasProfile = false;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId != null) {
+        try {
+          final data = await supabase
+              .from('profiles')
+              .select('allergens')
+              .eq('id', userId)
+              .maybeSingle();
+          if (data != null &&
+              data['allergens'] != null &&
+              (data['allergens'] as List).isNotEmpty) {
+            hasProfile = true;
+          }
+        } catch (_) {
+          // 프로필 조회 실패 시 안전하게 프로필 설정 화면으로 보냄
+        }
+      }
+
+      if (!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => hasProfile
+              ? const ScanGuideScreen()
+              : const AllergyProfileScreen(),
+        ),
+      );
+    } on AuthException catch (e) {
+      // Supabase가 반환하는 인증 관련 에러 (이메일/비밀번호 틀림 등)
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('로그인 실패: ${e.message}')),
+        );
+      }
+    } catch (e) {
+      // 네트워크 오류 등 그 외 모든 에러
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('오류가 발생했습니다: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
-
-  // 이메일 형식 체크
-  if (!email.contains('@')) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('올바른 이메일 형식을 입력해주세요')),
-    );
-    return;
-  }
-
-  // 비밀번호 길이 체크
-  if (password.length < 6) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('비밀번호는 6자리 이상 입력해주세요')),
-    );
-    return;
-  }
-
-  // 임시 로그인 통과 (Step 5에서 실제 API 연동)
-  Navigator.pushReplacement(
-    context,
-    MaterialPageRoute(
-      builder: (context) => const AllergyProfileScreen(),
-    ),
-  );
-}
 
   @override
   Widget build(BuildContext context) {
@@ -83,6 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
+                enabled: !_isLoading,
                 decoration: InputDecoration(
                   labelText: '이메일',
                   prefixIcon: const Icon(Icons.email_outlined),
@@ -96,6 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
               TextField(
                 controller: _passwordController,
                 obscureText: _obscurePassword,
+                enabled: !_isLoading,
                 decoration: InputDecoration(
                   labelText: '비밀번호',
                   prefixIcon: const Icon(Icons.lock_outline),
@@ -123,10 +180,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
                   ),
-                  onPressed: _login,
-                  child: const Text('로그인',
-                      style: TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold)),
+                  onPressed: _isLoading ? null : _login,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : const Text('로그인',
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.bold)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -138,13 +204,15 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text('계정이 없으신가요?',
                       style: TextStyle(color: Colors.grey)),
                   TextButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => const SignupScreen()),
-                      );
-                    },
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => const SignupScreen()),
+                            );
+                          },
                     child: const Text('회원가입',
                         style: TextStyle(
                             color: Color(0xFFE53935),
