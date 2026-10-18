@@ -1,105 +1,125 @@
 import 'package:flutter/material.dart';
-import 'dart:math' as math;
+import '../../models/scan_record.dart';
+import '../../services/scan_history_store.dart';
 
-class HistoryScreen extends StatelessWidget {
+class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final records = _mockRecords();
+  State<HistoryScreen> createState() => _HistoryScreenState();
+}
 
+class _HistoryScreenState extends State<HistoryScreen> {
+  @override
+  void initState() {
+    super.initState();
+    ScanHistoryStore.instance.load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
-      appBar: AppBar(
-        backgroundColor: const Color(0xFFE53935),
+       appBar: AppBar(
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
         title: const Text(
           '알아챈 기록',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          style: TextStyle(
+              color: Color(0xFF1F2A24),
+              fontSize: 20,
+              fontWeight: FontWeight.bold),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: Color(0xFF1F2A24)),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
+      body: ValueListenableBuilder<List<ScanRecord>>(
+        valueListenable: ScanHistoryStore.instance.records,
+        builder: (context, records, _) {
+          if (records.isEmpty) {
+            return const _EmptyState();
+          }
+          return ListView(
+            padding: const EdgeInsets.all(20),
+            children: [
+              ...records.map(
+                (r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _HistoryCard(record: r),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const _DisclaimerCard(),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          ...records.map(
-            (r) => Padding(
-              padding: const EdgeInsets.only(bottom: 16),
-              child: _HistoryCard(record: r),
-            ),
+          Icon(Icons.history, size: 72, color: Colors.grey),
+          SizedBox(height: 16),
+          Text(
+            '아직 스캔한 제품이 없어요',
+            style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black54),
           ),
-          const SizedBox(height: 8),
-          const _DisclaimerCard(),
+          SizedBox(height: 8),
+          Text(
+            '성분표를 스캔하면 여기에 기록돼요',
+            style: TextStyle(fontSize: 14, color: Colors.grey),
+          ),
         ],
       ),
     );
   }
-
-  // 임시 Mock 데이터 (Step 5에서 실제 API로 교체)
-  List<_ScanRecord> _mockRecords() {
-    return [
-      _ScanRecord(
-        title: '새우깡',
-        date: '2026.08.06 14:32',
-        ingredientsText:
-            '소맥분(밀), 전분, 미강유, 새우 6.4%, 정제소금, 설탕, 효모추출물, 새우조미분말, 대두단백',
-        dangerFindings: const [
-          _Allergen('밀', WheatPainter()),
-          _Allergen('새우', ShrimpPainter()),
-        ],
-        cautionFindings: const [
-          _Allergen('대두', SoyPainter()),
-        ],
-        overallLevel: RiskLevel.danger,
-      ),
-      _ScanRecord(
-        title: '포카칩',
-        date: '2026.08.05 11:15',
-        ingredientsText:
-            '감자, 식물성유지(해바라기유, 팜유), 미강유, 정제소금, 유당(우유), 유화제, 허브추출물',
-        dangerFindings: const [],
-        cautionFindings: const [
-          _Allergen('우유', MilkPainter()),
-        ],
-        overallLevel: RiskLevel.caution,
-      ),
-      _ScanRecord(
-        title: '허니버터칩',
-        date: '2026.08.04 09:00',
-        ingredientsText:
-            '감자, 식물성유지(해바라기유, 팜유), 설탕, 꿀 0.01%, 버터 0.03%(우유), 정제소금, 합성향료(허니버터향)',
-        dangerFindings: const [],
-        cautionFindings: const [],
-        overallLevel: RiskLevel.safe,
-      ),
-    ];
-  }
 }
 
-enum RiskLevel { danger, caution, safe }
+// 성분 이름 → 아이콘 이미지 (assets/allergens/ 폴더)
+const Map<String, String> _iconAssets = {
+  '난류': 'egg',
+  '계란': 'egg',
+  '달걀': 'egg',
+  '우유': 'milk',
+  '메밀': 'buckwheat',
+  '땅콩': 'peanut',
+  '대두': 'soy',
+  '대두(콩)': 'soy',
+  '밀': 'wheat',
+  '호두': 'walnut',
+  '게': 'crab',
+  '새우': 'shrimp',
+  '오징어': 'squid',
+  '고등어': 'mackerel',
+  '조개류': 'clam',
+  '복숭아': 'peach',
+  '토마토': 'tomato',
+  '닭고기': 'chicken',
+  '돼지고기': 'pork',
+  '쇠고기': 'beef',
+  '소고기': 'beef',
+  '아황산류': 'wine',
+};
 
-class _Allergen {
-  final String label;
-  final CustomPainter painter;
-  const _Allergen(this.label, this.painter);
-}
-
-class _ScanRecord {
-  final String title;
-  final String date;
-  final String ingredientsText;
-  final List<_Allergen> dangerFindings;
-  final List<_Allergen> cautionFindings;
-  final RiskLevel overallLevel;
-
-  const _ScanRecord({
-    required this.title,
-    required this.date,
-    required this.ingredientsText,
-    required this.dangerFindings,
-    required this.cautionFindings,
-    required this.overallLevel,
-  });
+String? _assetFor(String name) {
+  final key = _iconAssets[name];
+  return key == null ? null : 'assets/allergens/$key.png';
 }
 
 Color _riskColor(RiskLevel level) {
@@ -125,12 +145,13 @@ String _riskLabel(RiskLevel level) {
 }
 
 class _HistoryCard extends StatelessWidget {
-  final _ScanRecord record;
+  final ScanRecord record;
   const _HistoryCard({required this.record});
 
   @override
   Widget build(BuildContext context) {
-    final color = _riskColor(record.overallLevel);
+    final level = record.level;
+    final color = _riskColor(level);
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -151,11 +172,6 @@ class _HistoryCard extends StatelessWidget {
                   record.title,
                   style: const TextStyle(
                       fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  record.date,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
                 ),
                 const SizedBox(height: 10),
                 Container(
@@ -189,14 +205,14 @@ class _HistoryCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _AllergenGroup(
-                  label: '위험 성분 ${record.dangerFindings.length}개',
+                  label: '위험 성분 ${record.dangerNames.length}개',
                   color: const Color(0xFFD32F2F),
-                  findings: record.dangerFindings,
+                  names: record.dangerNames,
                 ),
                 _AllergenGroup(
-                  label: '주의 성분 ${record.cautionFindings.length}개',
+                  label: '주의 성분 ${record.cautionNames.length}개',
                   color: const Color(0xFFF57C00),
-                  findings: record.cautionFindings,
+                  names: record.cautionNames,
                 ),
               ],
             ),
@@ -212,7 +228,7 @@ class _HistoryCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text(
-                _riskLabel(record.overallLevel),
+                _riskLabel(level),
                 style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,
@@ -229,12 +245,12 @@ class _HistoryCard extends StatelessWidget {
 class _AllergenGroup extends StatelessWidget {
   final String label;
   final Color color;
-  final List<_Allergen> findings;
+  final List<String> names;
 
   const _AllergenGroup({
     required this.label,
     required this.color,
-    required this.findings,
+    required this.names,
   });
 
   @override
@@ -247,32 +263,40 @@ class _AllergenGroup extends StatelessWidget {
               color: color, fontWeight: FontWeight.bold, fontSize: 14),
         ),
         const SizedBox(height: 10),
-        if (findings.isNotEmpty)
+        if (names.isNotEmpty)
           Row(
             mainAxisSize: MainAxisSize.min,
-            children: findings
-                .map(
-                  (f) => Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Column(
-                      children: [
-                        Container(
-                          width: 52,
-                          height: 52,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
-                          padding: const EdgeInsets.all(9),
-                          child: CustomPaint(painter: f.painter),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(f.label, style: const TextStyle(fontSize: 13)),
-                      ],
+            children: names.map((name) {
+              final asset = _assetFor(name);
+              return Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Column(
+                  children: [
+                    // 위험(빨강)·주의(주황) 구분은 테두리 색으로 표시
+                    Container(
+                      width: 58,
+                      height: 58,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: color, width: 3),
+                        color: const Color(0xFFFFF8E6),
+                      ),
+                      child: ClipOval(
+                        child: asset != null
+                            ? Image.asset(
+                                asset,
+                                fit: BoxFit.cover,
+                                filterQuality: FilterQuality.medium,
+                              )
+                            : Icon(Icons.restaurant, color: color, size: 26),
+                      ),
                     ),
-                  ),
-                )
-                .toList(),
+                    const SizedBox(height: 6),
+                    Text(name, style: const TextStyle(fontSize: 13)),
+                  ],
+                ),
+              );
+            }).toList(),
           ),
       ],
     );
@@ -315,269 +339,4 @@ class _DisclaimerCard extends StatelessWidget {
       ),
     );
   }
-}
-
-// ==================== 알레르기 성분 아이콘 (CustomPainter) ====================
-
-class WheatPainter extends CustomPainter {
-  const WheatPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    final stem = Paint()
-      ..color = Colors.white
-      ..strokeWidth = size.width * 0.05
-      ..strokeCap = StrokeCap.round;
-
-    final cx = size.width / 2;
-
-    canvas.drawLine(
-      Offset(cx, size.height * 0.20),
-      Offset(cx, size.height * 0.95),
-      stem,
-    );
-
-    const n = 6;
-    for (int i = 0; i < n; i++) {
-      final t = i / (n - 1);
-      final y = size.height * 0.24 + t * size.height * 0.58;
-      final spread = size.width * 0.03 + t * size.width * 0.10;
-      final kw = size.width * 0.15;
-      final kh = size.height * 0.20;
-      canvas.drawOval(Rect.fromLTWH(cx - spread - kw, y, kw, kh), fill);
-      canvas.drawOval(Rect.fromLTWH(cx + spread, y, kw, kh), fill);
-    }
-
-    final awn = Paint()
-      ..color = Colors.white
-      ..strokeWidth = size.width * 0.035
-      ..strokeCap = StrokeCap.round;
-    for (final angDeg in [-22.0, 0.0, 22.0]) {
-      final rad = angDeg * math.pi / 180;
-      final x1 = cx + size.width * 0.015 * math.sin(rad);
-      final y1 = size.height * 0.18;
-      final x2 = cx + size.width * 0.20 * math.sin(rad);
-      final y2 = size.height * 0.18 - size.height * 0.20 * math.cos(rad);
-      canvas.drawLine(Offset(x1, y1), Offset(x2, y2), awn);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class ShrimpPainter extends CustomPainter {
-  const ShrimpPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    // 몸통 색과 대비되는 눈동자용 컬러(원 배경색과 맞춰주세요 - 위험:D32F2F / 주의:F57C00)
-    final eyePaint = Paint()..color = const Color(0xFFD32F2F);
-
-    final arcCx = size.width * 0.52;
-    final arcCy = size.height * 0.56;
-    final pathR = size.width * 0.30;
-    const startAngDeg = 200.0;
-    const endAngDeg = 375.0;
-    const steps = 16;
-
-    Offset headPos = Offset.zero;
-    double headR = 0;
-    Offset tailPos = Offset.zero;
-    double tailAngRad = 0;
-
-    // 머리→꼬리로 갈수록 작아지는 원을 곡선을 따라 겹쳐 그려 몸통을 표현
-    for (int i = 0; i <= steps; i++) {
-      final t = i / steps;
-      final rad = (startAngDeg + t * (endAngDeg - startAngDeg)) * math.pi / 180;
-      final cx0 = arcCx + pathR * math.cos(rad);
-      final cy0 = arcCy + pathR * math.sin(rad);
-      final r = size.width * 0.155 * (1 - t) + size.width * 0.035 * t;
-      canvas.drawCircle(Offset(cx0, cy0), r, fill);
-      if (i == 0) {
-        headPos = Offset(cx0, cy0);
-        headR = r;
-      }
-      if (i == steps) {
-        tailPos = Offset(cx0, cy0);
-        tailAngRad = rad;
-      }
-    }
-
-    // 머리 (조금 더 통통하게)
-    canvas.drawCircle(headPos, headR * 1.15, fill);
-
-    // 눈
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: Offset(headPos.dx, headPos.dy - headR * 0.5),
-        width: headR * 0.7,
-        height: headR * 0.7,
-      ),
-      eyePaint,
-    );
-
-    // 더듬이
-    final antStart = Offset(headPos.dx + headR * 0.5, headPos.dy - headR * 0.9);
-    final antEnd = Offset(antStart.dx + size.width * 0.22, antStart.dy - size.height * 0.20);
-    canvas.drawLine(
-      antStart,
-      antEnd,
-      Paint()
-        ..color = Colors.white
-        ..strokeWidth = size.width * 0.02
-        ..strokeCap = StrokeCap.round,
-    );
-
-    // 꼬리 지느러미 (부채꼴 3장)
-    final fanCenterDeg = tailAngRad * 180 / math.pi;
-    for (final offset in [-28.0, 0.0, 28.0]) {
-      final rad = (fanCenterDeg + offset) * math.pi / 180;
-      final len = size.width * 0.15;
-      final ex = tailPos.dx + len * math.cos(rad);
-      final ey = tailPos.dy + len * math.sin(rad);
-      final perp = rad + math.pi / 2;
-      final w = size.width * 0.026;
-      final path = Path()
-        ..moveTo(tailPos.dx - w * math.cos(perp), tailPos.dy - w * math.sin(perp))
-        ..lineTo(tailPos.dx + w * math.cos(perp), tailPos.dy + w * math.sin(perp))
-        ..lineTo(ex, ey)
-        ..close();
-      canvas.drawPath(path, fill);
-    }
-
-    // 배 쪽 다리 3개
-    final legPaint = Paint()
-      ..color = Colors.white
-      ..strokeWidth = size.width * 0.02
-      ..strokeCap = StrokeCap.round;
-    for (final t in [0.30, 0.45, 0.60]) {
-      final rad = (startAngDeg + t * (endAngDeg - startAngDeg)) * math.pi / 180;
-      final innerR = pathR - size.width * 0.10;
-      final lx = arcCx + innerR * math.cos(rad);
-      final ly = arcCy + innerR * math.sin(rad);
-      canvas.drawLine(
-        Offset(lx, ly),
-        Offset(lx + size.width * 0.05, ly + size.height * 0.09),
-        legPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class SoyPainter extends CustomPainter {
-  const SoyPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final strokePaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = size.width * 0.075;
-    final fillPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    final podRect = Rect.fromLTWH(
-      size.width * 0.20,
-      size.height * 0.08,
-      size.width * 0.60,
-      size.height * 0.84,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(podRect, Radius.circular(size.width * 0.30)),
-      strokePaint,
-    );
-
-    final beanR = size.width * 0.135;
-    for (final ty in [0.30, 0.50, 0.70]) {
-      canvas.drawCircle(
-        Offset(size.width * 0.5, size.height * ty),
-        beanR,
-        fillPaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
-class MilkPainter extends CustomPainter {
-  const MilkPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final fillPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(
-        Rect.fromLTWH(
-          size.width * 0.38,
-          size.height * 0.02,
-          size.width * 0.24,
-          size.height * 0.10,
-        ),
-        Radius.circular(size.width * 0.025),
-      ),
-      fillPaint,
-    );
-
-    canvas.drawRect(
-      Rect.fromLTWH(
-        size.width * 0.41,
-        size.height * 0.12,
-        size.width * 0.18,
-        size.height * 0.12,
-      ),
-      fillPaint,
-    );
-
-    final body = Path()
-      ..moveTo(size.width * 0.41, size.height * 0.24)
-      ..lineTo(size.width * 0.59, size.height * 0.24)
-      ..quadraticBezierTo(
-        size.width * 0.76,
-        size.height * 0.30,
-        size.width * 0.76,
-        size.height * 0.46,
-      )
-      ..lineTo(size.width * 0.76, size.height * 0.86)
-      ..quadraticBezierTo(
-        size.width * 0.76,
-        size.height * 0.94,
-        size.width * 0.66,
-        size.height * 0.94,
-      )
-      ..lineTo(size.width * 0.34, size.height * 0.94)
-      ..quadraticBezierTo(
-        size.width * 0.24,
-        size.height * 0.94,
-        size.width * 0.24,
-        size.height * 0.86,
-      )
-      ..lineTo(size.width * 0.24, size.height * 0.46)
-      ..quadraticBezierTo(
-        size.width * 0.24,
-        size.height * 0.30,
-        size.width * 0.41,
-        size.height * 0.24,
-      )
-      ..close();
-    canvas.drawPath(body, fillPaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

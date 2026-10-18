@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../profile/allergy_profile_screen.dart';
+import '../home/home_shell.dart';
+import '../../services/session_store.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -24,11 +25,13 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _signup() {
     // 임시 회원가입 (Step 5에서 실제 API 연동)
-    Navigator.pushReplacement(
+    SessionStore.email = _emailController.text.trim();
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
-        builder: (context) => const AllergyProfileScreen(),
+        builder: (context) => const HomeShell(),
       ),
+      (route) => false,
     );
   }
 
@@ -39,8 +42,14 @@ class _SignupScreenState extends State<SignupScreen> {
       appBar: AppBar(
         title: const Text('회원가입',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2A24),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -51,7 +60,9 @@ class _SignupScreenState extends State<SignupScreen> {
               const SizedBox(height: 24),
               const Text('환영합니다!',
                   style: TextStyle(
-                      fontSize: 28, fontWeight: FontWeight.bold)),
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF1F2A24))),
               const Text('계정을 만들어 시작하세요',
                   style: TextStyle(fontSize: 16, color: Colors.grey)),
               const SizedBox(height: 40),
@@ -107,10 +118,10 @@ class _SignupScreenState extends State<SignupScreen> {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
+                    backgroundColor: const Color(0xFF2F6B54),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+                        borderRadius: BorderRadius.circular(26)),
                   ),
                   onPressed: _signup,
                   child: const Text('회원가입',

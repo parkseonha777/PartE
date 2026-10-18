@@ -41,8 +41,14 @@ class AlternativeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('대체 식품 추천',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2A24),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
       ),
       body: Column(
         children: [
@@ -50,16 +56,18 @@ class AlternativeScreen extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: Colors.red[50],
+            color: const Color(0xFFD1E7CE),
             child: Row(
               children: [
                 const Icon(Icons.swap_horiz,
-                    color: Color(0xFFE53935), size: 28),
+                    color: Color(0xFF2F6B54), size: 28),
                 const SizedBox(width: 12),
                 Text(
                   '"$dangerIngredient" 대신 드실 수 있어요',
                   style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.bold),
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF265438)),
                 ),
               ],
             ),
@@ -74,6 +82,8 @@ class AlternativeScreen extends StatelessWidget {
                 final item = alternatives[index];
                 final isSafe = item['safeLevel'] == 'safe';
                 return Card(
+                  color: Colors.white,
+                  surfaceTintColor: Colors.transparent,
                   margin: const EdgeInsets.only(bottom: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -138,7 +148,7 @@ class AlternativeScreen extends StatelessWidget {
                               const SizedBox(height: 4),
                               Text(item['category'],
                                   style: const TextStyle(
-                                      color: Color(0xFFE53935),
+                                      color: Color(0xFF2F6B54),
                                       fontSize: 12,
                                       fontWeight: FontWeight.bold)),
                               const SizedBox(height: 4),

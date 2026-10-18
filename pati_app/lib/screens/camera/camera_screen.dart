@@ -75,8 +75,14 @@ class _CameraScreenState extends State<CameraScreen> {
       appBar: AppBar(
         title: const Text('성분표 스캔',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2A24),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
       ),
       body: Stack(
         children: [
@@ -87,7 +93,7 @@ class _CameraScreenState extends State<CameraScreen> {
             )
           else
             const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53935)),
+              child: CircularProgressIndicator(color: Color(0xFF8CC88A)),
             ),
 
           // 가이드 프레임 오버레이
@@ -97,7 +103,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 width: 300,
                 height: 260,
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE53935), width: 3),
+                  border: Border.all(color: const Color(0xFF8CC88A), width: 3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Align(
@@ -121,7 +127,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: Color(0xFFE53935)),
+                    CircularProgressIndicator(color: Color(0xFF8CC88A)),
                     SizedBox(height: 20),
                     Text('성분 분석 중...',
                         style: TextStyle(color: Colors.white, fontSize: 18)),
@@ -144,15 +150,15 @@ class _CameraScreenState extends State<CameraScreen> {
                     height: 72,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFFE53935),
+                      color: const Color(0xFF2F6B54),
                       border: Border.all(color: Colors.white, width: 4),
                     ),
                     child: const Icon(Icons.camera_alt,
                         color: Colors.white, size: 32),
-                    ),
                   ),
                 ),
               ),
+            ),
         ],
       ),
     );

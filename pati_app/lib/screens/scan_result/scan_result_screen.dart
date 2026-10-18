@@ -1,9 +1,42 @@
 import 'package:flutter/material.dart';
 import '../alternative/alternative_screen.dart';
+import '../../models/scan_record.dart';
+import '../../services/scan_history_store.dart';
 
-class ScanResultScreen extends StatelessWidget {
+class ScanResultScreen extends StatefulWidget {
   final String imagePath;
   const ScanResultScreen({super.key, required this.imagePath});
+
+  @override
+  State<ScanResultScreen> createState() => _ScanResultScreenState();
+}
+
+class _ScanResultScreenState extends State<ScanResultScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _saveToHistory();
+  }
+
+  // 스캔 결과를 최근 스캔 기록에 저장 (Step 5에서 실제 분석 결과로 교체)
+  void _saveToHistory() {
+    final now = DateTime.now();
+    ScanHistoryStore.instance.add(
+      ScanRecord(
+        id: now.microsecondsSinceEpoch.toString(),
+        scannedAt: now,
+        ingredientsText: _mockIngredients.map((e) => e['name']).join(', '),
+        dangerNames: _mockIngredients
+            .where((e) => e['level'] == 'danger')
+            .map((e) => e['name'] as String)
+            .toList(),
+        cautionNames: _mockIngredients
+            .where((e) => e['level'] == 'caution')
+            .map((e) => e['name'] as String)
+            .toList(),
+      ),
+    );
+  }
 
   // 임시 Mock 데이터 (Step 5에서 실제 API로 교체)
   final List<Map<String, dynamic>> _mockIngredients = const [
@@ -68,8 +101,14 @@ class ScanResultScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('분석 결과',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: const Color(0xFF1F2A24),
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
       ),
       body: Column(
         children: [
@@ -114,6 +153,8 @@ class ScanResultScreen extends StatelessWidget {
                 final item = sortedList[index];
                 final color = _getRiskColor(item['level']);
                 return Card(
+                  color: Colors.white,
+                  surfaceTintColor: Colors.transparent,
                   margin: const EdgeInsets.only(bottom: 10),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -152,16 +193,16 @@ class ScanResultScreen extends StatelessWidget {
               height: 52,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
+                  backgroundColor: const Color(0xFF2F6B54),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(26),
                   ),
                 ),
                 onPressed: () {
                   Navigator.push(
                     context,
-                     MaterialPageRoute(
+                    MaterialPageRoute(
                       builder: (context) => const AlternativeScreen(
                         dangerIngredient: '계란',
                       ),

@@ -5,42 +5,52 @@ import '../../screens/history/history_screen.dart';
 class ScanGuideScreen extends StatelessWidget {
   const ScanGuideScreen({super.key});
 
+  static const Color _green = Color(0xFF2F6B54);
+  static const Color _text = Color(0xFF1F2A24);
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('팥이', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
-          actions: [
-    IconButton(
-      icon: const Icon(Icons.history),
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const HistoryScreen(),
+        title: const Text('팥이',
+            style: TextStyle(fontWeight: FontWeight.bold, color: _text)),
+        backgroundColor: Colors.white,
+        surfaceTintColor: Colors.white,
+        foregroundColor: _text,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.history),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const HistoryScreen(),
+                ),
+              );
+            },
           ),
-        );
-      },
-    ),
-  ],
-),
+        ],
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // 아이콘
-            const Icon(Icons.document_scanner,
-                size: 100, color: Color(0xFFE53935)),
+            const Icon(Icons.document_scanner, size: 100, color: _green),
             const SizedBox(height: 32),
 
             // 제목
             const Text(
               '성분표를 카메라로 촬영해주세요',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                  fontSize: 22, fontWeight: FontWeight.bold, color: _text),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
@@ -57,10 +67,10 @@ class ScanGuideScreen extends StatelessWidget {
               height: 56,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
+                  backgroundColor: _green,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(28),
                   ),
                 ),
                 onPressed: () {
@@ -72,7 +82,8 @@ class ScanGuideScreen extends StatelessWidget {
                   );
                 },
                 child: const Text('스캔 시작',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               ),
             ),
           ],
@@ -86,10 +97,11 @@ class ScanGuideScreen extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8.0),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFFE53935), size: 28),
+          Icon(icon, color: _green, size: 28),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(text, style: const TextStyle(fontSize: 16)),
+            child: Text(text,
+                style: const TextStyle(fontSize: 16, color: _text)),
           ),
         ],
       ),

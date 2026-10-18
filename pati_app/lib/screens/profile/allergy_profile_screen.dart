@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../scan_guide/scan_guide_screen.dart';
+import '../../services/allergy_store.dart';
+import '../home/home_shell.dart';
 
 class AllergyProfileScreen extends StatefulWidget {
   const AllergyProfileScreen({super.key});
@@ -30,13 +31,37 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
     '조개류': false,
   };
 
-  void _saveAndContinue() {
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const ScanGuideScreen(),
-      ),
-    );
+  @override
+  void initState() {
+    super.initState();
+    _loadSaved();
+  }
+
+  // 저장해 둔 선택을 불러와서 화면에 표시
+  Future<void> _loadSaved() async {
+    await AllergyStore.instance.load();
+    if (!mounted) return;
+    final saved = AllergyStore.instance.selected.value;
+    setState(() {
+      for (final k in _allergies.keys.toList()) {
+        _allergies[k] = saved.contains(k);
+      }
+    });
+  }
+
+  Future<void> _saveAndContinue() async {
+    final names =
+        _allergies.entries.where((e) => e.value).map((e) => e.key).toList();
+    await AllergyStore.instance.save(names);
+    if (!mounted) return;
+    if (Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    } else {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeShell()),
+      );
+    }
   }
 
   @override
@@ -48,9 +73,14 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
       appBar: AppBar(
         title: const Text('알레르기 프로필',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
-        foregroundColor: Colors.white,
-        automaticallyImplyLeading: false,
+            backgroundColor: Colors.white,
+            surfaceTintColor: Colors.white,
+            foregroundColor: const Color(0xFF1F2A24),
+            elevation: 0,
+            scrolledUnderElevation: 0,
+            shape: const Border(
+          bottom: BorderSide(color: Color(0xFFE5E5E5), width: 1),
+        ),
       ),
       body: Column(
         children: [
@@ -58,7 +88,7 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: Colors.red[50],
+            color: const Color(0xFFD1E7CE),
             child: Column(
               children: [
                 const Text('알레르기 유발 성분을 선택해주세요',
@@ -67,7 +97,7 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
                 const SizedBox(height: 4),
                 Text('선택된 성분: $selectedCount개',
                     style: const TextStyle(
-                        color: Color(0xFFE53935),
+                        color: Color(0xFF2F6B54),
                         fontWeight: FontWeight.bold)),
               ],
             ),
@@ -93,12 +123,12 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
                   child: Container(
                     decoration: BoxDecoration(
                       color: isSelected
-                          ? const Color(0xFFE53935)
+                          ? const Color(0xFF2F6B54)
                           : Colors.grey[100],
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: isSelected
-                            ? const Color(0xFFE53935)
+                            ? const Color(0xFF2F6B54)
                             : Colors.grey[300]!,
                       ),
                     ),
@@ -126,13 +156,13 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
               height: 52,
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFE53935),
+                  backgroundColor: const Color(0xFF2F6B54),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
                 ),
                 onPressed: _saveAndContinue,
-                child: const Text('저장하고 시작하기',
+                child: const Text('저장하기',
                     style: TextStyle(
                         fontSize: 18, fontWeight: FontWeight.bold)),
               ),
