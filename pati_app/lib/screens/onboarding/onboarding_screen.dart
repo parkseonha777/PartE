@@ -62,11 +62,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(page['icon'],
-                            size: 120, color: const Color(0xFFE53935)),
+                            size: 120, color: const Color(0xFF2F6B54)),
                         const SizedBox(height: 40),
                         Text(page['title'],
                             style: const TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.bold),
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF1F2A24)),
                             textAlign: TextAlign.center),
                         const SizedBox(height: 16),
                         Text(page['desc'],
@@ -91,7 +93,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   height: 8,
                   decoration: BoxDecoration(
                     color: _currentPage == index
-                        ? const Color(0xFFE53935)
+                        ? const Color(0xFF2F6B54)
                         : Colors.grey[300],
                     borderRadius: BorderRadius.circular(4),
                   ),
@@ -108,10 +110,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
+                    backgroundColor: const Color(0xFF2F6B54),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(26),
                     ),
                   ),
                   onPressed: () {
