@@ -4,8 +4,10 @@ import '../alternative/alternative_screen.dart';
 class ScanResultScreen extends StatelessWidget {
   final String imagePath;
 
-  // 서버 /scan 응답 형태: {"위험": [...], "주의": [...], "안전": [...]}
-  // 각 값은 알레르겐 이름(예: "난류", "우유") 문자열 리스트
+  // 서버 응답 형태
+  // - /scan        : {"위험": [...], "주의": [...], "안전": [...]}
+  // - /scan/verify : 위 키 + "verification": {...}, "translation": {...}
+  // verification/translation 이 없으면(구버전 서버) 기존 화면과 똑같이 동작한다.
   final Map<String, dynamic> scanResult;
 
   const ScanResultScreen({
@@ -13,6 +15,25 @@ class ScanResultScreen extends StatelessWidget {
     required this.imagePath,
     required this.scanResult,
   });
+
+  Map<String, dynamic>? get _verification =>
+      scanResult['verification'] as Map<String, dynamic>?;
+
+  Map<String, dynamic>? get _translation =>
+      scanResult['translation'] as Map<String, dynamic>?;
+
+  bool get _isVerified => _verification?['status'] == 'verified';
+
+  bool get _needsRecheck => _verification?['needs_recheck'] == true;
+
+  /// 알레르겐 이름 → LLM 판정 상세 (근거 표기, 규칙/LLM 일치 여부)
+  Map<String, Map<String, dynamic>> get _detailsByAllergen {
+    final details = (_verification?['details'] as List?) ?? const [];
+    return {
+      for (final d in details.cast<Map<String, dynamic>>())
+        d['allergen'] as String: d,
+    };
+  }
 
   // 서버 응답({"위험":[...], "주의":[...], "안전":[...]})을
   // 기존 UI가 쓰던 형태([{'name':..., 'level':...}, ...])로 변환
@@ -86,6 +107,10 @@ class ScanResultScreen extends StatelessWidget {
         ingredients.where((e) => e['level'] == 'safe').toList();
     final sortedList = [...dangerList, ...cautionList, ...safeList];
 
+    final details = _detailsByAllergen;
+    final translatedNames = Map<String, dynamic>.from(
+        (_translation?['allergen_names'] as Map?) ?? const {});
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -100,9 +125,7 @@ class ScanResultScreen extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: dangerList.isNotEmpty
-                ? Colors.red[50]
-                : Colors.green[50],
+            color: dangerList.isNotEmpty ? Colors.red[50] : Colors.green[50],
             child: Row(
               children: [
                 Icon(
@@ -121,8 +144,7 @@ class ScanResultScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color:
-                          dangerList.isNotEmpty ? Colors.red : Colors.green,
+                      color: dangerList.isNotEmpty ? Colors.red : Colors.green,
                     ),
                   ),
                 ),
@@ -130,51 +152,45 @@ class ScanResultScreen extends StatelessWidget {
             ),
           ),
 
-          // 성분 리스트 (결과가 하나도 없는 경우 대비)
+          // AI 교차 확인 상태 배너
+          if (_verification != null) _buildVerificationBanner(),
+
           Expanded(
-            child: sortedList.isEmpty
-                ? const Center(
-                    child: Text(
-                      '등록된 알레르기 항목과 일치하는 성분이 없습니다.',
-                      style: TextStyle(fontSize: 15, color: Colors.grey),
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                if (sortedList.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: Text(
+                        '등록된 알레르기 항목과 일치하는 성분이 없습니다.',
+                        style: TextStyle(fontSize: 15, color: Colors.grey),
+                      ),
                     ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: sortedList.length,
-                    itemBuilder: (context, index) {
-                      final item = sortedList[index];
-                      final color = _getRiskColor(item['level']);
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          side: BorderSide(color: color, width: 1.5),
-                        ),
-                        child: ListTile(
-                          leading: Icon(_getRiskIcon(item['level']),
-                              color: color, size: 32),
-                          title: Text(item['name'],
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.bold)),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              _getRiskLabel(item['level']),
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                        ),
-                      );
-                    },
                   ),
+
+                // 알레르기 항목별 판정 카드
+                for (final item in sortedList)
+                  _buildAllergenCard(
+                    item,
+                    details[item['name']],
+                    translatedNames[item['name']]?.toString(),
+                  ),
+
+                // 번역 결과
+                if (_translation != null) ...[
+                  const SizedBox(height: 8),
+                  _buildTranslationCard(),
+                ],
+
+                // AI가 교정한 성분표 원문
+                if (_isVerified) ...[
+                  const SizedBox(height: 8),
+                  _buildCorrectedTextTile(),
+                ],
+              ],
+            ),
           ),
 
           // 대체 식품 보기 버튼 (위험 성분이 있을 때만 표시)
@@ -205,11 +221,221 @@ class ScanResultScreen extends StatelessWidget {
                   },
                   icon: const Icon(Icons.swap_horiz),
                   label: const Text('대체 식품 보기',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.bold)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerificationBanner() {
+    final IconData icon;
+    final Color color;
+    final String message;
+
+    if (!_isVerified) {
+      icon = Icons.info_outline;
+      color = Colors.grey;
+      message = 'AI 교차 확인을 하지 못해 OCR 결과만 표시합니다. '
+          '포장지의 원재료명을 직접 한 번 더 확인해주세요.';
+    } else if (_needsRecheck) {
+      icon = Icons.refresh;
+      color = Colors.orange;
+      final legibility = _verification?['legibility'];
+      message = legibility == 'poor'
+          ? '사진이 흐려 일부 글자를 읽기 어려웠어요. 성분표를 더 가까이에서 다시 촬영해주세요.'
+          : 'OCR과 AI 판정이 다른 항목이 있어 더 위험한 쪽으로 표시했어요. 포장지를 함께 확인해주세요.';
+    } else {
+      icon = Icons.verified;
+      color = Colors.blue;
+      message = 'AI가 성분표 사진을 다시 읽어 판정을 교차 확인했어요.';
+    }
+
+    final notes = (_verification?['notes'] as String?) ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      color: color.withValues(alpha: 0.08),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(message, style: TextStyle(fontSize: 13, color: color)),
+                if (notes.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(notes,
+                        style:
+                            const TextStyle(fontSize: 12, color: Colors.black54)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAllergenCard(
+    Map<String, dynamic> item,
+    Map<String, dynamic>? detail,
+    String? translatedName,
+  ) {
+    final color = _getRiskColor(item['level']);
+    final evidence = (detail?['evidence'] as String?) ?? '';
+    final agreed = detail?['agreed'] != false;
+
+    final subtitleLines = <String>[
+      if (translatedName != null && translatedName.isNotEmpty) translatedName,
+      if (evidence.isNotEmpty) '근거: $evidence',
+      if (!agreed) 'OCR·AI 판정이 달라 더 위험한 쪽으로 표시',
+    ];
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 10),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: color, width: 1.5),
+      ),
+      child: ListTile(
+        leading: Icon(_getRiskIcon(item['level']), color: color, size: 32),
+        title: Text(item['name'],
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        subtitle: subtitleLines.isEmpty
+            ? null
+            : Text(subtitleLines.join('\n'),
+                style: const TextStyle(fontSize: 12)),
+        isThreeLine: subtitleLines.length >= 2,
+        trailing: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(
+            _getRiskLabel(item['level']),
+            style: const TextStyle(
+                color: Colors.white, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTranslationCard() {
+    final t = _translation!;
+    final summary = (t['summary'] as String?) ?? '';
+    final ingredients = (t['ingredients'] as String?) ?? '';
+    final warning = (t['warning'] as String?) ?? '';
+    final lang = (t['language'] as String?)?.toUpperCase() ?? '';
+
+    return Card(
+      margin: EdgeInsets.zero,
+      color: Colors.grey[50],
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.translate, size: 20, color: Color(0xFFE53935)),
+                const SizedBox(width: 8),
+                Text('번역 ($lang)',
+                    style: const TextStyle(
+                        fontSize: 15, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            if (summary.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(summary,
+                  style: const TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w600)),
+            ],
+            if (ingredients.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text('원재료명',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+              const SizedBox(height: 2),
+              SelectableText(ingredients, style: const TextStyle(fontSize: 14)),
+            ],
+            if (warning.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Text('알레르기 표시 / 혼입 주의',
+                  style: TextStyle(fontSize: 12, color: Colors.black54)),
+              const SizedBox(height: 2),
+              SelectableText(warning, style: const TextStyle(fontSize: 14)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCorrectedTextTile() {
+    final v = _verification!;
+    final productName = v['product_name'] as String?;
+    final ingredientText = (v['corrected_ingredient_text'] as String?) ?? '';
+    final warningText = (v['corrected_warning_text'] as String?) ?? '';
+    final corrections = ((v['ocr_corrections'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
+
+    return Card(
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        leading: const Icon(Icons.fact_check_outlined),
+        title: const Text('AI가 확인한 성분표 원문',
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (productName != null && productName.isNotEmpty) ...[
+            const Text('제품명',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            Text(productName, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 10),
+          ],
+          if (ingredientText.isNotEmpty) ...[
+            const Text('원재료명',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            SelectableText(ingredientText, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 10),
+          ],
+          if (warningText.isNotEmpty) ...[
+            const Text('알레르기 표시 / 혼입 주의',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            SelectableText(warningText, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 10),
+          ],
+          if (corrections.isNotEmpty) ...[
+            const Text('OCR 오타 교정',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final c in corrections)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text('${c['ocr']} → ${c['corrected']}',
+                        style: const TextStyle(fontSize: 12)),
+                  ),
+              ],
+            ),
+          ],
         ],
       ),
     );
