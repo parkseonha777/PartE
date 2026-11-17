@@ -29,6 +29,10 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
     '쇠고기': false,
     '오징어': false,
     '조개류': false,
+    '굴': false,
+    '전복': false,
+    '홍합': false,
+    '잣': false,
   };
 
   @override
