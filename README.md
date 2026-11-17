@@ -20,6 +20,55 @@
 }
 \`\`\`
 
+## POST /scan/verify
+OCR 결과를 LLM(Claude)이 **원본 이미지와 대조해 교차 확인**하고, 교정된 성분표를 번역합니다.
+
+처리 흐름: 이미지 → EasyOCR → 규칙 기반 판정(`/scan`과 동일) → LLM 교차 확인(이미지 + OCR 원문 + 1차 판정) → 병합 → 번역
+
+- 최종 판정은 규칙 기반과 LLM 중 **더 위험한 쪽**을 따릅니다. LLM이 위험도를 낮출 수는 없습니다.
+- LLM 호출이 실패하거나 `ANTHROPIC_API_KEY`가 없으면 규칙 기반 결과만 반환합니다 (`verification.status = "unavailable"`).
+- `.env`에 `ANTHROPIC_API_KEY`가 필요합니다. 모델은 `LLM_MODEL`로 바꿀 수 있습니다.
+
+### Request (multipart/form-data)
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| file | File | 성분표 촬영 이미지 |
+| allergens | String | 쉼표로 구분된 알레르기 항목 |
+| target_lang | String | 번역 언어 (기본 `en`; `ko, ja, zh, zh-TW, vi, th, es, fr, de, ru, id`) |
+
+### Response (JSON)
+최상위 `위험`/`주의`/`안전`은 `/scan`과 같은 형식이라 기존 결과 화면을 그대로 쓸 수 있습니다.
+```json
+{
+  "위험": ["우유", "대두"],
+  "주의": ["난류"],
+  "안전": ["고등어"],
+  "verification": {
+    "status": "verified",
+    "legibility": "good",
+    "needs_recheck": true,
+    "product_name": "새우깡",
+    "corrected_ingredient_text": "소맥분(밀:미국산), 새우(국산), 대두유, 우유",
+    "corrected_warning_text": "이 제품은 난류, 땅콩을 사용한 제품과 같은 제조 시설에서 제조하고 있습니다.",
+    "ocr_corrections": [{"ocr": "유유", "corrected": "우유"}],
+    "details": [
+      {"allergen": "대두", "rule": "주의", "llm": "위험", "final": "위험", "agreed": false, "evidence": "대두유"}
+    ],
+    "notes": ""
+  },
+  "translation": {
+    "language": "en",
+    "ingredients": "Wheat flour (wheat: USA), shrimp (Korea), soybean oil, milk",
+    "warning": "Manufactured in the same facility that processes eggs and peanuts.",
+    "allergen_names": {"우유": "Milk", "난류": "Eggs"},
+    "summary": "Contains milk and soybean. May contain eggs."
+  }
+}
+```
+`needs_recheck`가 `true`면 이미지가 흐리거나 두 판정이 엇갈린 경우이므로, 앱에서 재촬영 또는 원문 확인을 안내하는 것을 권장합니다.
+
+테스트 (API 키·DB 없이 실행): `python -m pytest test_llm_verifier.py -v`
+
 ## GET 
 서버 상태 확인용
 \`\`\`json
