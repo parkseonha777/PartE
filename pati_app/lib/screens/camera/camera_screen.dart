@@ -256,7 +256,7 @@ class _CameraScreenState extends State<CameraScreen> {
               style: TextButton.styleFrom(foregroundColor: Colors.white),
               onPressed: _isAnalyzing ? null : _showLanguagePicker,
               icon: const Icon(Icons.translate, size: 20),
-              label: Text(lang.toUpperCase()),
+              label: Text(lang == 'auto' ? '자동' : lang.toUpperCase()),
             ),
           ),
           // 알레르기 설정 재편집 진입점

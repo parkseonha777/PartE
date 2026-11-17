@@ -247,7 +247,7 @@ class ScanResultScreen extends StatelessWidget {
       final legibility = _verification?['legibility'];
       message = legibility == 'poor'
           ? '사진이 흐려 일부 글자를 읽기 어려웠어요. 성분표를 더 가까이에서 다시 촬영해주세요.'
-          : 'OCR과 AI 판정이 다른 항목이 있어 더 위험한 쪽으로 표시했어요. 포장지를 함께 확인해주세요.';
+          : 'OCR과 AI 판정이 다른 항목이 있어요. 항목별 근거를 보고 포장지를 함께 확인해주세요.';
     } else {
       icon = Icons.verified;
       color = Colors.blue;
@@ -293,11 +293,15 @@ class ScanResultScreen extends StatelessWidget {
     final color = _getRiskColor(item['level']);
     final evidence = (detail?['evidence'] as String?) ?? '';
     final agreed = detail?['agreed'] != false;
+    final decidedBy = detail?['decided_by'] as String?;
 
     final subtitleLines = <String>[
       if (translatedName != null && translatedName.isNotEmpty) translatedName,
       if (evidence.isNotEmpty) '근거: $evidence',
-      if (!agreed) 'OCR·AI 판정이 달라 더 위험한 쪽으로 표시',
+      if (!agreed)
+        decidedBy == 'llm'
+            ? 'AI가 사진을 확인해 판정을 조정함'
+            : 'OCR·AI 판정이 달라 더 위험한 쪽으로 표시',
     ];
 
     return Card(

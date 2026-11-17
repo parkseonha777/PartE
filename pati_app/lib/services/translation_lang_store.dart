@@ -8,10 +8,11 @@ class TranslationLangStore {
   static final TranslationLangStore instance = TranslationLangStore._();
 
   static const _key = 'translation_lang_v1';
-  static const defaultLang = 'en';
+  static const defaultLang = 'auto';
 
   /// 서버(llm_verifier.LANGUAGE_NAMES)가 지원하는 언어 코드 → 화면 표시 이름
   static const Map<String, String> languages = {
+    'auto': '자동 (외국어 → 한국어, 한국어 → English)',
     'en': 'English',
     'ja': '日本語',
     'zh': '简体中文',

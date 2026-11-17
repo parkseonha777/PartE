@@ -7,7 +7,7 @@ import os
 import uuid
 from PIL import Image, ImageOps
 
-from allergen_matcher import find_allergens_in_text, ALLERGEN_DB
+from allergen_matcher import find_allergens_in_raw, ALLERGEN_DB
 from llm_verifier import verify_and_translate, LANGUAGE_NAMES
 from text_cleaner import clean_ocr_text_list
 from DB.allergen_lookup import get_alternatives
@@ -95,7 +95,7 @@ def _rule_based_match(ocr_lines: list[dict], user_allergens: list[str]) -> dict:
             status_code=422,
             detail="이미지에서 텍스트를 인식하지 못했습니다. 성분표가 잘 보이도록 다시 촬영해주세요."
         )
-    return find_allergens_in_text(cleaned, user_allergens)
+    return find_allergens_in_raw([l["text"] for l in ocr_lines], user_allergens)
 
 
 def _cleanup(*paths: str) -> None:
@@ -130,14 +130,14 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
 async def scan_label_verified(
     file: UploadFile = File(...),
     allergens: str = Form(...),
-    target_lang: str = Form("en"),
+    target_lang: str = Form("auto"),
 ):
     """
     OCR → 규칙 기반 판정 → LLM이 원본 이미지와 대조해 교차 확인 → 번역.
 
     file: 성분표 이미지
     allergens: 쉼표로 구분된 알레르기 항목 (예: "난류,우유,새우")
-    target_lang: 번역 언어 코드 (기본 "en"; ko, ja, zh, vi 등)
+    target_lang: 번역 언어 코드 (기본 "auto": 외국어 성분표→한국어, 한국어 성분표→영어 / en, ko, ja, zh, vi 등 지정 가능)
 
     응답의 "위험"/"주의"/"안전"은 /scan과 같은 형식이며,
     규칙 기반과 LLM 판정 중 더 위험한 쪽을 최종 판정으로 사용한다.

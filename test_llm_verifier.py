@@ -189,3 +189,55 @@ def test_parses_json_text_when_no_tool_call(tmp_path):
     res = verify_and_translate(str(img), [], ALLERGENS, {}, rule, "en", client=TextClient())
     assert res["verification"]["status"] == "verified"
     assert set(res["위험"]) == {"우유", "대두"} and res["주의"] == ["난류"]
+
+
+def _llm(level, legibility="good", evidence="달걀, 땅콩, 호두 혼입가능"):
+    return {
+        "legibility": legibility,
+        "allergen_judgements": [{"allergen": "호두", "level": level, "evidence": evidence}],
+    }
+
+
+def test_llm_caution_overrides_rule_danger_when_legible():
+    """오!감자 사례: 규칙은 혼입 문구를 원재료로 오인해 위험, AI는 주의 → 주의"""
+    final, details = merge_results({"위험": ["호두"]}, _llm("주의"), ["호두"])
+    assert final["주의"] == ["호두"] and details[0]["decided_by"] == "llm"
+
+
+def test_rule_danger_kept_when_image_not_legible():
+    final, _ = merge_results({"위험": ["호두"]}, _llm("주의", legibility="partial"), ["호두"])
+    assert final["위험"] == ["호두"]
+
+
+def test_rule_danger_kept_without_evidence():
+    final, _ = merge_results({"위험": ["호두"]}, _llm("주의", evidence=""), ["호두"])
+    assert final["위험"] == ["호두"]
+
+
+def test_llm_can_never_mark_safe_over_rule():
+    for rule_level in ("위험", "주의"):
+        final, _ = merge_results({rule_level: ["호두"]}, _llm("안전"), ["호두"])
+        assert final[rule_level] == ["호두"]
+
+
+def test_auto_language_prompt_and_fallback(tmp_path):
+    img = tmp_path / "label.jpg"
+    _make_image(img)
+    out = {**LLM_OUTPUT, "label_language": "en",
+           "translation": {k: v for k, v in LLM_OUTPUT["translation"].items()}}
+    client = FakeClient(out)
+    res = verify_and_translate(str(img), [], ALLERGENS, {}, {"안전": ALLERGENS}, "auto", client=client)
+    prompt = client.last_request["messages"][0]["content"][1]["text"]
+    assert "한국어가 아니면 한국어(ko)로" in prompt
+    # LLM이 language를 안 적었으면 영어 원문 → 한국어로 본다
+    assert res["translation"]["language"] == "ko"
+    assert res["verification"]["label_language"] == "en"
+
+
+def test_translation_language_reported_by_llm_wins(tmp_path):
+    img = tmp_path / "label.jpg"
+    _make_image(img)
+    out = {**LLM_OUTPUT, "translation": {**LLM_OUTPUT["translation"], "language": "ko"}}
+    res = verify_and_translate(str(img), [], ALLERGENS, {}, {"안전": ALLERGENS}, "auto",
+                               client=FakeClient(out))
+    assert res["translation"]["language"] == "ko"
