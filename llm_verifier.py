@@ -214,10 +214,12 @@ def call_llm(
     try:
         response = client.messages.create(
             model=LLM_MODEL,
-            max_tokens=4096,
+            max_tokens=8192,
             system=SYSTEM_PROMPT,
             tools=[VERIFY_TOOL],
-            tool_choice={"type": "tool", "name": "report_verification"},
+            # 일부 모델은 도구 강제 호출(tool_choice: tool/any)을 지원하지 않아 auto를 쓴다.
+            # 시스템 프롬프트에서 report_verification 도구로만 제출하도록 지시한다.
+            tool_choice={"type": "auto"},
             messages=[
                 {
                     "role": "user",
@@ -237,6 +239,17 @@ def call_llm(
     for block in response.content:
         if getattr(block, "type", None) == "tool_use" and block.name == "report_verification":
             return block.input
+
+    # 도구를 쓰지 않고 본문에 JSON으로 답한 경우 대비
+    text = "".join(getattr(b, "text", "") for b in response.content if getattr(b, "type", None) == "text")
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            data = json.loads(text[start:end + 1])
+            if isinstance(data, dict) and "allergen_judgements" in data:
+                return data
+        except json.JSONDecodeError:
+            pass
     raise LLMUnavailable("LLM 응답에 검증 결과가 없습니다.")
 
 

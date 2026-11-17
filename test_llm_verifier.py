@@ -98,7 +98,8 @@ def test_verify_and_translate_response_shape(tmp_path):
 
     # 요청 검증: 이미지 + 텍스트, 강제 도구 호출, 이미지 축소
     req = client.last_request
-    assert req["tool_choice"] == {"type": "tool", "name": "report_verification"}
+    assert req["tool_choice"] == {"type": "auto"}
+    assert req["tools"][0]["name"] == "report_verification"
     content = req["messages"][0]["content"]
     assert content[0]["type"] == "image" and "English" in content[1]["text"]
     import base64
@@ -172,3 +173,19 @@ def test_verify_endpoint(tmp_path, monkeypatch):
     # 지원하지 않는 언어
     r3 = api.post("/scan/verify", files=files, data={**data, "target_lang": "xx"})
     assert r3.status_code == 400
+
+
+def test_parses_json_text_when_no_tool_call(tmp_path):
+    import json as _json
+    img = tmp_path / "label.jpg"
+    _make_image(img)
+
+    class TextClient(FakeClient):
+        def create(self, **kwargs):
+            block = SimpleNamespace(type="text", text="결과입니다:\n" + _json.dumps(LLM_OUTPUT, ensure_ascii=False))
+            return SimpleNamespace(content=[block])
+
+    rule = {"위험": [], "주의": [], "안전": ALLERGENS}
+    res = verify_and_translate(str(img), [], ALLERGENS, {}, rule, "en", client=TextClient())
+    assert res["verification"]["status"] == "verified"
+    assert set(res["위험"]) == {"우유", "대두"} and res["주의"] == ["난류"]
