@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart' show supabase;
 import '../profile/allergy_profile_screen.dart';
+import '../../services/allergy_store.dart';
+import '../../services/session_store.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -73,6 +75,12 @@ class _SignupScreenState extends State<SignupScreen> {
         );
         return;
       }
+
+      // 홈 화면이 쓰는 값(이름, 알레르기 카드)을 새 사용자 기준으로 맞춤
+      SessionStore.email = email;
+      await AllergyStore.instance.save(const []);
+
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,

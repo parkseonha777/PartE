@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../main.dart' show supabase;
-import '../scan_guide/scan_guide_screen.dart';
+import '../home/home_shell.dart';
+import '../../services/allergy_store.dart';
 
 class AllergyProfileScreen extends StatefulWidget {
   // true면 "설정에서 다시 편집" 모드 (저장 후 뒤로가기)
-  // false(기본)면 최초 가입 흐름 (저장 후 스캔 가이드로 이동)
+  // false(기본)면 최초 가입 흐름 (저장 후 홈 화면으로 이동)
   final bool isEditMode;
 
   const AllergyProfileScreen({super.key, this.isEditMode = false});
@@ -91,6 +92,9 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
         'updated_at': DateTime.now().toIso8601String(),
       });
 
+      // 홈 화면의 알레르기 카드가 바로 바뀌도록 기기 저장소도 같이 갱신
+      await AllergyStore.instance.save(selected);
+
       if (!mounted) return;
 
       if (widget.isEditMode) {
@@ -98,7 +102,7 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
       } else {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const ScanGuideScreen()),
+          MaterialPageRoute(builder: (context) => const HomeShell()),
         );
       }
     } catch (e) {
