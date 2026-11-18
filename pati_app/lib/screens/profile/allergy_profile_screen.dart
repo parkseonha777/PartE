@@ -36,6 +36,9 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
     '오징어': false,
     '조개류': false,
     '잣': false,
+    '굴': false,
+    '전복': false,
+    '홍합': false,
   };
 
   bool _isLoading = true;
