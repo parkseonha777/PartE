@@ -14,21 +14,26 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+  // 최근스캔 탭을 열 때마다 이력을 다시 불러오기 위한 값
+  int _historyVersion = 0;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: IndexedStack(
         index: _index,
-        children: const [
-          HomeScreen(),
-          HistoryScreen(),
-          MyInfoScreen(),
+        children: [
+          const HomeScreen(),
+          HistoryScreen(key: ValueKey(_historyVersion)),
+          const MyInfoScreen(),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        onTap: (i) => setState(() {
+          if (i == 1) _historyVersion++;
+          _index = i;
+        }),
         type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.white,
         selectedItemColor: HomeColors.green,

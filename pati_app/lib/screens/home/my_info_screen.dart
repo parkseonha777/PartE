@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../main.dart' show supabase;
 import '../../services/allergy_store.dart';
 import '../../services/scan_history_store.dart';
 import '../../services/session_store.dart';
@@ -25,7 +26,8 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
   void _openProfile() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AllergyProfileScreen()),
+      MaterialPageRoute(
+          builder: (context) => const AllergyProfileScreen(isEditMode: true)),
     );
   }
 
@@ -56,8 +58,15 @@ class _MyInfoScreenState extends State<MyInfoScreen> {
     );
   }
 
-  void _logout() {
+  Future<void> _logout() async {
+    try {
+      await supabase.auth.signOut();
+    } catch (_) {
+      // 네트워크 오류가 나도 앱 쪽 로그인 상태는 정리하고 로그인 화면으로 이동
+    }
     SessionStore.clear();
+    await AllergyStore.instance.save(const []);
+    if (!mounted) return;
     Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
       MaterialPageRoute(builder: (context) => const LoginScreen()),
       (route) => false,

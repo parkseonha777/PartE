@@ -26,7 +26,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _openProfile() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AllergyProfileScreen()),
+      MaterialPageRoute(
+          builder: (context) => const AllergyProfileScreen(isEditMode: true)),
     );
   }
 

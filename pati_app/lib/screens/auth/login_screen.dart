@@ -3,7 +3,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../main.dart' show supabase;
 import 'signup_screen.dart';
 import '../profile/allergy_profile_screen.dart';
-import '../scan_guide/scan_guide_screen.dart';
+import '../home/home_shell.dart';
+import '../../services/allergy_store.dart';
+import '../../services/session_store.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -63,9 +65,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // 이미 알레르기 프로필을 설정한 사용자면 바로 스캔 화면으로,
+      // 이미 알레르기 프로필을 설정한 사용자면 바로 홈 화면으로,
       // 처음이면 알레르기 프로필 설정 화면으로 이동
       bool hasProfile = false;
+      List<String> savedAllergens = [];
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
         try {
@@ -78,20 +81,24 @@ class _LoginScreenState extends State<LoginScreen> {
               data['allergens'] != null &&
               (data['allergens'] as List).isNotEmpty) {
             hasProfile = true;
+            savedAllergens = List<String>.from(data['allergens']);
           }
         } catch (_) {
           // 프로필 조회 실패 시 안전하게 프로필 설정 화면으로 보냄
         }
       }
 
+      // 홈 화면이 쓰는 값(이름, 알레르기 카드)을 로그인한 사용자 기준으로 맞춤
+      SessionStore.email = email;
+      await AllergyStore.instance.save(savedAllergens);
+
       if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => hasProfile
-              ? const ScanGuideScreen()
-              : const AllergyProfileScreen(),
+          builder: (context) =>
+              hasProfile ? const HomeShell() : const AllergyProfileScreen(),
         ),
       );
     } on AuthException catch (e) {
