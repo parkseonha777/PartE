@@ -15,31 +15,40 @@ class AllergyProfileScreen extends StatefulWidget {
 }
 
 class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
-  // DB(allergens 테이블)의 명칭과 정확히 일치시킴 — 매칭 로직이 이 이름으로 대조하기 때문에 중요
+  // 식약처 고시 제2019-97호 알레르기 유발물질 22종.
+  // 서버 매칭 로직(allergen_matcher.py)이 이 이름으로 대조하므로 글자를 바꾸면 안 된다.
   final Map<String, bool> _allergies = {
+    // 축산물 및 유제품 (5)
     '난류': false,
     '우유': false,
-    '메밀': false,
-    '땅콩': false,
-    '대두': false,
-    '밀': false,
-    '고등어': false,
-    '게': false,
-    '새우': false,
     '돼지고기': false,
-    '복숭아': false,
-    '토마토': false,
-    '아황산류': false,
-    '호두': false,
     '닭고기': false,
     '쇠고기': false,
-    '오징어': false,
-    '조개류': false,
+    // 곡류 및 견과류 (6)
+    '밀': false,
+    '메밀': false,
+    '대두': false,
+    '땅콩': false,
+    '호두': false,
     '잣': false,
+    // 수산물 및 패류 (8)
+    '고등어': false,
+    '새우': false,
+    '게': false,
+    '오징어': false,
     '굴': false,
     '전복': false,
     '홍합': false,
+    '기타 조개류': false,
+    // 과일 및 채소류 (2)
+    '복숭아': false,
+    '토마토': false,
+    // 화학 물질 (1)
+    '아황산류': false,
   };
+
+  // 예전 버전에서 저장한 '조개류'는 새 4개 항목을 모두 선택한 것으로 옮긴다.
+  static const _shellfishKeys = ['굴', '전복', '홍합', '기타 조개류'];
 
   bool _isLoading = true;
   bool _isSaving = false;
@@ -67,8 +76,10 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
       if (data != null && data['allergens'] != null) {
         final saved = List<String>.from(data['allergens']);
         setState(() {
+          final hadOldShellfish = saved.contains('조개류');
           for (final key in _allergies.keys) {
-            _allergies[key] = saved.contains(key);
+            _allergies[key] = saved.contains(key) ||
+                (hadOldShellfish && _shellfishKeys.contains(key));
           }
         });
       }
