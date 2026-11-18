@@ -166,9 +166,12 @@ def test_verify_endpoint(tmp_path, monkeypatch):
     assert body["주의"] == ["난류"]
     assert body["translation"]["summary"]
 
-    # 기존 /scan은 형식 그대로
+    # 기존 /scan은 형식 그대로 (reliable은 OCR 품질 기준 인식 충분 여부)
     r2 = api.post("/scan", files=files, data={"allergens": "우유,난류"})
-    assert r2.json() == {"위험": ["우유"], "주의": ["난류"], "안전": []}
+    body2 = r2.json()
+    reliable = body2.pop("reliable")
+    assert isinstance(reliable, bool)
+    assert body2 == {"위험": ["우유"], "주의": ["난류"], "안전": []}
 
     # 지원하지 않는 언어
     r3 = api.post("/scan/verify", files=files, data={**data, "target_lang": "xx"})
