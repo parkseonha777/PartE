@@ -84,9 +84,15 @@ WARNING_START_MARKERS = ["이 제품은", "이제품은", "본 제품은", "본�
 # "훈입", "흔입", "훈일"은 EasyOCR이 "혼입"을 자주 잘못 읽는 형태
 CONTAMINATION_MARKERS = [
     "혼입", "훈입", "흔입", "훈일",
+    "혼임", "혼인", "혼일", "호이", "호인",   # EasyOCR이 "혼입"을 읽을 때 나오는 오타
     "같은 시설", "같은시설", "동일 시설", "동일시설",
     "같은 제조", "같은제조", "제조 시설", "제조시설",
 ]
+
+# "~ 함유" 표시. 혼입 문구 앞에서 "실제 함유 알레르겐" 목록과 "혼입 가능" 목록을 가르는 경계로 쓴다.
+# EasyOCR이 "함유"를 "함을", "함우", "하요" 등으로 잘못 읽어서 오타까지 넓게 잡는다.
+# 경계를 넓게 잡으면 혼입 문구로 넘기는 범위가 줄어 더 위험한 쪽(위험 판정)으로 기울므로 안전하다.
+CONTAINS_PATTERN = re.compile(r"[함합하][유을우윤위요욜옹]")
 
 # 영어 혼입 표시. 한국어와 달리 알레르겐이 표시 "뒤"에 온다.
 # 예: "MAY CONTAIN PEANUTS", "MANUFACTURED IN A FACILITY THAT ALSO PROCESSES TREE NUTS"
@@ -201,8 +207,8 @@ def split_raw_ingredient_and_warning(raw_lines: list[str]) -> tuple[list[str], l
 
         marker_pos = min(positions)
         before = seg[:marker_pos]
-        boundary = before.rfind("함유")
-        start = boundary + len("함유") if boundary != -1 else 0
+        # 가장 가까운(뒤쪽) "함유" 표지 다음부터를 혼입 문구로 본다
+        start = max((m.end() for m in CONTAINS_PATTERN.finditer(before)), default=0)
         start = max(start, marker_pos - MAX_WARNING_SPAN)
 
         ingredient_parts.append(seg[:start])
