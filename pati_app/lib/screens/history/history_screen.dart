@@ -243,6 +243,7 @@ const Map<String, String> _iconAssets = {
   '굴': 'oyster',
   '전복': 'abalone',
   '홍합': 'mussel',
+  '기타 조개류': 'clam',
   '잣': 'pinenut',
   '복숭아': 'peach',
   '토마토': 'tomato',
