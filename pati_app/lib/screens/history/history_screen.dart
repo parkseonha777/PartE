@@ -145,6 +145,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         final scannedAt = item['scanned_at'] as String;
                         final productName =
                             item['product_name'] as String? ?? '스캔한 식품';
+                        final dangerNames = List<String>.from(
+                            (item['danger_names'] as List?) ?? const []);
+                        final cautionNames = List<String>.from(
+                            (item['caution_names'] as List?) ?? const []);
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -182,6 +186,16 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                             fontSize: 13,
                                             fontWeight: FontWeight.bold),
                                       ),
+                                      _AllergenIcons(
+                                        label: '위험 성분',
+                                        color: Colors.red,
+                                        names: dangerNames,
+                                      ),
+                                      _AllergenIcons(
+                                        label: '주의 성분',
+                                        color: const Color(0xFFF57C00),
+                                        names: cautionNames,
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -205,6 +219,109 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         );
                       },
                     ),
+    );
+  }
+}
+
+// 성분 이름 → 아이콘 이미지 (assets/allergens/ 폴더)
+const Map<String, String> _iconAssets = {
+  '난류': 'egg',
+  '계란': 'egg',
+  '달걀': 'egg',
+  '우유': 'milk',
+  '메밀': 'buckwheat',
+  '땅콩': 'peanut',
+  '대두': 'soy',
+  '대두(콩)': 'soy',
+  '밀': 'wheat',
+  '호두': 'walnut',
+  '게': 'crab',
+  '새우': 'shrimp',
+  '오징어': 'squid',
+  '고등어': 'mackerel',
+  '조개류': 'clam',
+  '굴': 'oyster',
+  '전복': 'abalone',
+  '홍합': 'mussel',
+  '잣': 'pinenut',
+  '복숭아': 'peach',
+  '토마토': 'tomato',
+  '닭고기': 'chicken',
+  '돼지고기': 'pork',
+  '쇠고기': 'beef',
+  '소고기': 'beef',
+  '아황산류': 'wine',
+};
+
+String? _assetFor(String name) {
+  final key = _iconAssets[name];
+  return key == null ? null : 'assets/allergens/$key.png';
+}
+
+// 위험(빨강)·주의(주황) 성분을 아이콘 이미지로 보여준다.
+// 이름이 없는 예전 이력은 아무것도 그리지 않는다.
+class _AllergenIcons extends StatelessWidget {
+  final String label;
+  final Color color;
+  final List<String> names;
+
+  const _AllergenIcons({
+    required this.label,
+    required this.color,
+    required this.names,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (names.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+                color: color, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: names.map((name) {
+              final asset = _assetFor(name);
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: color, width: 3),
+                      color: const Color(0xFFFFF8E6),
+                    ),
+                    child: ClipOval(
+                      child: asset != null
+                          ? Image.asset(
+                              asset,
+                              fit: BoxFit.cover,
+                              filterQuality: FilterQuality.medium,
+                              // 아이콘 파일이 없어도 화면이 깨지지 않도록
+                              errorBuilder: (_, __, ___) =>
+                                  Icon(Icons.restaurant, color: color, size: 22),
+                            )
+                          : Icon(Icons.restaurant, color: color, size: 22),
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(name, style: const TextStyle(fontSize: 12)),
+                ],
+              );
+            }).toList(),
+          ),
+        ],
+      ),
     );
   }
 }
