@@ -263,8 +263,10 @@ class ScanResultScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => AlternativeScreen(
-                          // 첫 번째 위험 성분을 기준으로 대체 식품 안내
-                          dangerIngredient: dangerList.first['name'],
+                          // 위험·주의로 판정된 성분을 모두 제외한 대체 식품 안내
+                          excludeIngredients: [...dangerList, ...cautionList]
+                              .map((e) => e['name'].toString())
+                              .toList(),
                         ),
                       ),
                     );

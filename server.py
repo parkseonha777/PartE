@@ -192,17 +192,21 @@ async def scan_label_verified(
 @app.get("/alternatives")
 async def alternatives(allergen: str, limit: int = 5):
     """
-    allergen: 위험으로 판정된 알레르겐 이름 (예: "우유")
+    allergen: 위험/주의로 판정된 알레르겐 이름. 여러 개면 쉼표로 구분 (예: "밀,우유")
     limit: 추천받을 최대 개수 (기본 5개)
 
-    해당 알레르겐이 포함되지 않은 식품을 DB에서 조회해 반환.
+    나열한 알레르겐이 모두 포함되지 않은 식품을 DB에서 조회해 반환.
     """
+    names = [a.strip() for a in allergen.split(",") if a.strip()]
+    if not names:
+        raise HTTPException(status_code=400, detail="알레르겐 이름이 비어 있습니다.")
+
     try:
-        items = get_alternatives(allergen, limit)
+        items = get_alternatives(names, limit)
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"대체 식품 조회 중 오류가 발생했습니다: {str(e)}"
         )
 
-    return {"allergen": allergen, "alternatives": items}
+    return {"allergen": allergen, "allergens": names, "alternatives": items}
