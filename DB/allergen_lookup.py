@@ -95,17 +95,20 @@ def find_food_by_name(food_name: str, limit: int = 5) -> list[dict]:
     ]
 
 
-def get_alternatives(allergen_name: str, limit: int = 5) -> list[str]:
+def get_alternatives(allergen_names, limit: int = 5) -> list[str]:
     """
-    지정한 알레르겐이 포함되지 않은 식품명을 무작위로 추천.
+    지정한 알레르겐이 하나도 포함되지 않은 식품명을 무작위로 추천.
+    allergen_names: 알레르겐 이름 하나(str) 또는 여러 개(list[str]).
     (현재는 카테고리 구분 없이 전체 DB에서 검색 — 추후 식품 유형(prdkind) 필드를
     추가하면 같은 카테고리 내에서만 추천하도록 개선 가능)
     """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL이 .env에 설정되어 있지 않습니다.")
 
+    if isinstance(allergen_names, str):
+        allergen_names = [allergen_names]
     # 앱의 22종 항목 중 DB에는 '조개류' 하나로만 저장된 것들은 '조개류' 기준으로 찾는다.
-    allergen_name = DB_NAME_ALIASES.get(allergen_name, allergen_name)
+    db_names = list(dict.fromkeys(DB_NAME_ALIASES.get(n, n) for n in allergen_names if n))
 
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()
@@ -116,12 +119,12 @@ def get_alternatives(allergen_name: str, limit: int = 5) -> list[str]:
         WHERE food_id NOT IN (
             SELECT fam.food_id FROM food_allergen_map fam
             JOIN allergens a ON fam.allergen_id = a.allergen_id
-            WHERE a.name = %s
+            WHERE a.name = ANY(%s)
         )
         ORDER BY RANDOM()
         LIMIT %s
         """,
-        (allergen_name, limit),
+        (db_names, limit),
     )
     rows = cur.fetchall()
     cur.close()

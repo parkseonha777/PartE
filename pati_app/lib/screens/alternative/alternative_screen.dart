@@ -4,11 +4,12 @@ import 'package:http/http.dart' as http;
 import '../camera/camera_screen.dart' show kServerBaseUrl;
 
 class AlternativeScreen extends StatefulWidget {
-  final String dangerIngredient;
+  // 대체 식품에서 제외할 성분 (위험 + 주의로 판정된 성분 전부)
+  final List<String> excludeIngredients;
 
   const AlternativeScreen({
     super.key,
-    required this.dangerIngredient,
+    required this.excludeIngredients,
   });
 
   @override
@@ -20,6 +21,8 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
   String? _error;
   List<String> _alternatives = [];
 
+  String get _excludeLabel => widget.excludeIngredients.join(', ');
+
   @override
   void initState() {
     super.initState();
@@ -28,8 +31,9 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
 
   Future<void> _fetchAlternatives() async {
     try {
+      final allergenParam = Uri.encodeComponent(widget.excludeIngredients.join(','));
       final uri = Uri.parse(
-        "$kServerBaseUrl/alternatives?allergen=${Uri.encodeComponent(widget.dangerIngredient)}&limit=5",
+        "$kServerBaseUrl/alternatives?allergen=$allergenParam&limit=5",
       );
       final response = await http.get(uri);
 
@@ -79,7 +83,7 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    '"${widget.dangerIngredient}"이(가) 없는 식품이에요',
+                    '"$_excludeLabel"이(가) 없는 식품이에요',
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.bold),
                   ),
@@ -148,7 +152,7 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
                                                         FontWeight.bold)),
                                             const SizedBox(height: 4),
                                             Text(
-                                              '"${widget.dangerIngredient}" 미포함',
+                                              '"$_excludeLabel" 미포함',
                                               style: const TextStyle(
                                                   color: Colors.green,
                                                   fontSize: 12,
