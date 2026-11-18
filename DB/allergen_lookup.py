@@ -16,6 +16,14 @@ load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+# 앱에서 세분화한 항목 → DB의 allergens 테이블에 저장된 이름
+DB_NAME_ALIASES = {
+    "굴": "조개류",
+    "전복": "조개류",
+    "홍합": "조개류",
+    "기타 조개류": "조개류",
+}
+
 
 def get_allergen_db() -> dict:
     """
@@ -95,6 +103,9 @@ def get_alternatives(allergen_name: str, limit: int = 5) -> list[str]:
     """
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL이 .env에 설정되어 있지 않습니다.")
+
+    # 앱의 22종 항목 중 DB에는 '조개류' 하나로만 저장된 것들은 '조개류' 기준으로 찾는다.
+    allergen_name = DB_NAME_ALIASES.get(allergen_name, allergen_name)
 
     conn = psycopg2.connect(DATABASE_URL)
     cur = conn.cursor()

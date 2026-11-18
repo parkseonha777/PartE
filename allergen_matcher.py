@@ -78,6 +78,32 @@ except Exception as e:
     print(f"[경고] 알레르겐 DB 연결 실패 → 기본 알레르겐 사전으로 실행합니다. ({type(e).__name__}: {e})")
     ALLERGEN_DB = _with_english(DEFAULT_ALLERGEN_DB)
 
+# 식약처 고시(제2019-97호) 22종 기준으로 앱에서는 조개류를 4개 항목으로 나눠 고른다.
+# DB(allergens 테이블)에는 아직 '조개류' 하나뿐이어서, 나눈 항목의 동의어를 코드에서 채운다.
+# 성분표에 "조개류(굴, 전복, 홍합 포함)"처럼 통칭만 적힌 경우도 안전을 위해 4개 항목 모두 걸리게 한다.
+# (기존 '조개류' 항목은 이미 저장된 사용자 프로필을 위해 그대로 둔다.)
+SHELLFISH_GENERIC_KO = ["조개류", "조게류"]
+SHELLFISH_GENERIC_EN = ["shellfish", "mollusc", "mollusk"]
+SHELLFISH_SPLIT = {
+    "굴": ["굴", "oyster"],
+    "전복": ["전복", "abalone"],
+    "홍합": ["홍합", "mussel"],
+    "기타 조개류": ["조개", "바지락", "모시조개", "꼬막", "대합", "가리비", "소라", "clam", "scallop"],
+}
+
+
+def _apply_shellfish_split(db: dict) -> dict:
+    for name, own in SHELLFISH_SPLIT.items():
+        merged = list(db.get(name, []))
+        for word in own + SHELLFISH_GENERIC_KO + SHELLFISH_GENERIC_EN:
+            if word not in merged:
+                merged.append(word)
+        db[name] = merged
+    return db
+
+
+ALLERGEN_DB = _apply_shellfish_split(ALLERGEN_DB)
+
 WARNING_START_MARKERS = ["이 제품은", "이제품은", "본 제품은", "본제품은", "이 제품에는"]
 
 # 문장 끝에 붙는 혼입 가능 표시. 예: "달걀, 땅콩, 호두 혼입가능", "...를 사용한 제품과 같은 시설에서 제조"

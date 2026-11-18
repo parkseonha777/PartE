@@ -337,6 +337,27 @@ def _translation_block(llm_output: dict, target_lang: str) -> dict:
     return t
 
 
+def _coerce(value, kind):
+    """LLM이 객체/배열을 JSON 문자열로 돌려준 경우 풀어 주고, 형식이 다르면 빈 값으로 바꾼다."""
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError:
+            return kind()
+    return value if isinstance(value, kind) else kind()
+
+
+def _normalize_llm_output(out: dict) -> dict:
+    """앱이 Map/List로 읽는 필드의 형식을 보장한다."""
+    out = dict(out)
+    translation = dict(_coerce(out.get("translation"), dict))
+    translation["allergen_names"] = _coerce(translation.get("allergen_names"), dict)
+    out["translation"] = translation
+    out["allergen_judgements"] = _coerce(out.get("allergen_judgements"), list)
+    out["ocr_corrections"] = _coerce(out.get("ocr_corrections"), list)
+    return out
+
+
 def verify_and_translate(
     image_path: str,
     ocr_lines: list[dict],
@@ -366,6 +387,7 @@ def verify_and_translate(
             "translation": None,
         }
 
+    llm_output = _normalize_llm_output(llm_output)
     final, details = merge_results(rule_result, llm_output, user_allergens)
     disagreements = [d for d in details if not d["agreed"]]
     legibility = llm_output.get("legibility", "partial")
