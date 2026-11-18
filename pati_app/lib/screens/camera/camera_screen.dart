@@ -162,13 +162,24 @@ class _CameraScreenState extends State<CameraScreen> {
         // 인식이 불충분하면서 위험/주의도 없는 결과는 "안전"으로 오해될 수 있어 저장하지 않음
         if (userId != null &&
             (reliable || dangerList.isNotEmpty || cautionList.isNotEmpty)) {
-          await supabase.from('scan_history').insert({
+          final row = {
             'user_id': userId,
             'danger_count': dangerList.length,
             'caution_count': cautionList.length,
             'safe_count': safeList.length,
             'result': historyResult,
-          });
+          };
+          try {
+            // 이력 화면의 알레르기 아이콘용 성분 이름 (DB에 컬럼이 있어야 함)
+            await supabase.from('scan_history').insert({
+              ...row,
+              'danger_names': dangerList.map((e) => e.toString()).toList(),
+              'caution_names': cautionList.map((e) => e.toString()).toList(),
+            });
+          } catch (_) {
+            // danger_names/caution_names 컬럼이 아직 없으면 이름 없이 저장
+            await supabase.from('scan_history').insert(row);
+          }
         }
       } catch (_) {
         // 이력 저장 실패는 무시하고 계속 진행
