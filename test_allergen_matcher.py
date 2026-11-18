@@ -113,3 +113,25 @@ def test_glutinous_rice_is_not_wheat():
     lines = ["RICE, PALM OIL(FAT), SUGAR, GLUTINOUS RICE POWDER, 간장분말, POTATO STARCH"]
     r = find_allergens_in_raw(lines, ["밀", "대두"])
     assert r["위험"] == ["대두"] and r["안전"] == ["밀"]
+
+
+# ---- 조개류 세분화 (식약처 22종) ----
+
+def test_split_shellfish_items_are_recognized():
+    """22종 개편: 굴/전복/홍합/기타 조개류가 각각 따로 판정된다"""
+    lines = ["원재료명 밀가루, 굴소스, 바지락 함유"]
+    r = find_allergens_in_raw(lines, ["굴", "전복", "홍합", "기타 조개류"])
+    assert set(r["위험"]) == {"굴", "기타 조개류"}
+    assert set(r["안전"]) == {"전복", "홍합"}
+
+
+def test_generic_shellfish_label_flags_every_split_item():
+    """성분표에 '조개류'로만 적혀 있으면 안전을 위해 4개 항목 모두 걸린다"""
+    r = find_allergens_in_raw(["원재료명 정제수, 조개류 추출물"], ["굴", "전복", "홍합", "기타 조개류"])
+    assert set(r["위험"]) == {"굴", "전복", "홍합", "기타 조개류"}
+
+
+def test_split_shellfish_english_and_legacy_key():
+    r = find_allergens_in_raw(["INGREDIENTS: water, oyster extract. MAY CONTAIN MUSSEL"],
+                              ["굴", "홍합", "전복", "조개류"])
+    assert r["위험"] == ["굴", "조개류"] and r["주의"] == ["홍합"] and r["안전"] == ["전복"]
