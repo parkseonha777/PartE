@@ -7,13 +7,14 @@ import 'package:http/http.dart' as http;
 import '../../main.dart' show supabase;
 import '../scan_result/scan_result_screen.dart';
 import '../profile/allergy_profile_screen.dart';
+import '../../services/translation_lang_store.dart';
 
 // TODO(프론트엔드): 실제 서버 배포 주소로 교체 필요.
 // - 컴퓨터에서 Flutter 웹/데스크톱으로 테스트: http://127.0.0.1:8000
 // - 안드로이드 에뮬레이터에서 테스트: http://10.0.2.2:8000
 // - 실제 폰(같은 와이파이)에서 테스트: http://<컴퓨터의 로컬 IP>:8000
 // - 나중에 서버를 실제로 배포하면 그 도메인/IP로 교체
-const String kServerBaseUrl = "http://127.0.0.1:8000";
+const String kServerBaseUrl = "http://127.0.0.1:8000"; 
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -32,6 +33,7 @@ class _CameraScreenState extends State<CameraScreen> {
   void initState() {
     super.initState();
     _initCamera();
+    TranslationLangStore.instance.load();
   }
 
   Future<void> _initCamera() async {
@@ -111,30 +113,43 @@ class _CameraScreenState extends State<CameraScreen> {
         return;
       }
 
-      final uri = Uri.parse("$kServerBaseUrl/scan");
-      final request = http.MultipartRequest('POST', uri);
+      final targetLang = TranslationLangStore.instance.selected.value;
 
-      request.files.add(
-        await http.MultipartFile.fromPath('file', imageFile.path),
+      // LLM 교차 확인 + 번역 엔드포인트 우선 사용.
+      // 서버가 아직 구버전이라 /scan/verify 가 없으면(404) 기존 /scan 으로 재시도.
+      var response = await _postScan(
+        '/scan/verify',
+        imageFile,
+        userAllergens,
+        extraFields: {'target_lang': targetLang},
+        timeout: const Duration(seconds: 90),
       );
-      request.fields['allergens'] = userAllergens.join(',');
-
-      final streamedResponse = await request.send();
-      final response = await http.Response.fromStream(streamedResponse);
-
-      if (response.statusCode != 200) {
-        final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
-        throw Exception(errorBody['detail'] ?? '분석 중 오류가 발생했습니다.');
+      if (response.statusCode == 404) {
+        response = await _postScan('/scan', imageFile, userAllergens);
       }
 
-      final result = jsonDecode(utf8.decode(response.bodyBytes));
-      // result 형태: {"위험": [...], "주의": [...], "안전": [...]}
+      if (response.statusCode != 200) {
+        String message = '분석 중 오류가 발생했습니다.';
+        try {
+          final errorBody = jsonDecode(utf8.decode(response.bodyBytes));
+          message = errorBody['detail']?.toString() ?? message;
+        } catch (_) {}
+        throw Exception(message);
+      }
+
+      final result =
+          jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+      // result 형태: {"위험": [...], "주의": [...], "안전": [...], "reliable": true/false,
+      //              "verification": {...}, "translation": {...}}
+      // (/scan 으로 대체된 경우 verification/translation 키는 없음)
 
       // ---- 스캔 이력 저장 (실패해도 결과 화면 표시는 막지 않음) ----
       try {
         final dangerList = List.from(result['위험'] ?? []);
         final cautionList = List.from(result['주의'] ?? []);
         final safeList = List.from(result['안전'] ?? []);
+        // 글자를 충분히 읽었는지 (서버가 보내지 않으면 true로 간주)
+        final reliable = result['reliable'] != false;
 
         String historyResult = 'safe';
         if (dangerList.isNotEmpty) {
@@ -144,7 +159,9 @@ class _CameraScreenState extends State<CameraScreen> {
         }
 
         final userId = supabase.auth.currentUser?.id;
-        if (userId != null) {
+        // 인식이 불충분하면서 위험/주의도 없는 결과는 "안전"으로 오해될 수 있어 저장하지 않음
+        if (userId != null &&
+            (reliable || dangerList.isNotEmpty || cautionList.isNotEmpty)) {
           await supabase.from('scan_history').insert({
             'user_id': userId,
             'danger_count': dangerList.length,
@@ -179,6 +196,53 @@ class _CameraScreenState extends State<CameraScreen> {
     }
   }
 
+  Future<http.Response> _postScan(
+    String path,
+    File imageFile,
+    List<String> userAllergens, {
+    Map<String, String> extraFields = const {},
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final request =
+        http.MultipartRequest('POST', Uri.parse('$kServerBaseUrl$path'));
+    request.files.add(
+      await http.MultipartFile.fromPath('file', imageFile.path),
+    );
+    request.fields['allergens'] = userAllergens.join(',');
+    request.fields.addAll(extraFields);
+
+    final streamed = await request.send().timeout(timeout);
+    return http.Response.fromStream(streamed);
+  }
+
+  Future<void> _showLanguagePicker() async {
+    final store = TranslationLangStore.instance;
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text('번역 언어 선택',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            for (final entry in TranslationLangStore.languages.entries)
+              ListTile(
+                title: Text(entry.value),
+                trailing: entry.key == store.selected.value
+                    ? const Icon(Icons.check, color: Color(0xFFE53935))
+                    : null,
+                onTap: () => Navigator.pop(context, entry.key),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (picked != null) await store.save(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -189,6 +253,16 @@ class _CameraScreenState extends State<CameraScreen> {
         backgroundColor: const Color(0xFFE53935),
         foregroundColor: Colors.white,
         actions: [
+          // 번역 언어 선택
+          ValueListenableBuilder<String>(
+            valueListenable: TranslationLangStore.instance.selected,
+            builder: (context, lang, _) => TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              onPressed: _isAnalyzing ? null : _showLanguagePicker,
+              icon: const Icon(Icons.translate, size: 20),
+              label: Text(lang == 'auto' ? '자동' : lang.toUpperCase()),
+            ),
+          ),
           // 알레르기 설정 재편집 진입점
           IconButton(
             icon: const Icon(Icons.settings),
@@ -260,6 +334,9 @@ class _CameraScreenState extends State<CameraScreen> {
                     SizedBox(height: 20),
                     Text('성분 분석 중...',
                         style: TextStyle(color: Colors.white, fontSize: 18)),
+                    SizedBox(height: 8),
+                    Text('AI가 성분표를 다시 확인하고 번역하고 있어요',
+                        style: TextStyle(color: Colors.white70, fontSize: 13)),
                   ],
                 ),
               ),
