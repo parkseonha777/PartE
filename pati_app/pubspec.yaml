@@ -51,6 +51,8 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   supabase_flutter: ^2.5.0
+  google_mlkit_text_recognition: ^1.0.3
+  image: ^4.13.1
 
 dev_dependencies:
   flutter_test:
