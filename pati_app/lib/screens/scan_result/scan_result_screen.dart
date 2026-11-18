@@ -216,13 +216,13 @@ class ScanResultScreen extends StatelessWidget {
                     translatedNames[item['name']]?.toString(),
                   ),
 
-                // 번역 결과
+                // 번역 결과 (접었다 펼 수 있음)
                 if (_translation != null) ...[
                   const SizedBox(height: 8),
-                  _buildTranslationCard(),
+                  _buildTranslationTile(),
                 ],
 
-                // AI가 교정한 성분표 원문
+                // AI가 교정한 성분표 원문 (접었다 펼 수 있음)
                 if (_isVerified) ...[
                   const SizedBox(height: 8),
                   _buildCorrectedTextTile(),
@@ -387,7 +387,7 @@ class ScanResultScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTranslationCard() {
+  Widget _buildTranslationTile() {
     final t = _translation!;
     final summary = (t['summary'] as String?) ?? '';
     final ingredients = (t['ingredients'] as String?) ?? '';
@@ -396,44 +396,36 @@ class ScanResultScreen extends StatelessWidget {
 
     return Card(
       margin: EdgeInsets.zero,
-      color: Colors.grey[50],
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.translate, size: 20, color: Color(0xFF2F6B54)),
-                const SizedBox(width: 8),
-                Text('번역 ($lang)',
-                    style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            if (summary.isNotEmpty) ...[
-              const SizedBox(height: 10),
-              Text(summary,
-                  style: const TextStyle(
-                      fontSize: 15, fontWeight: FontWeight.w600)),
-            ],
-            if (ingredients.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text('원재료명',
-                  style: TextStyle(fontSize: 12, color: Colors.black54)),
-              const SizedBox(height: 2),
-              SelectableText(ingredients, style: const TextStyle(fontSize: 14)),
-            ],
-            if (warning.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              const Text('알레르기 표시 / 혼입 주의',
-                  style: TextStyle(fontSize: 12, color: Colors.black54)),
-              const SizedBox(height: 2),
-              SelectableText(warning, style: const TextStyle(fontSize: 14)),
-            ],
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        leading: const Icon(Icons.translate, color: Color(0xFF2F6B54)),
+        title: Text('번역 ($lang)',
+            style:
+                const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        expandedCrossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (summary.isNotEmpty) ...[
+            Text(summary,
+                style:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 12),
           ],
-        ),
+          if (ingredients.isNotEmpty) ...[
+            const Text('원재료명',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 2),
+            SelectableText(ingredients, style: const TextStyle(fontSize: 14)),
+            const SizedBox(height: 12),
+          ],
+          if (warning.isNotEmpty) ...[
+            const Text('알레르기 표시 / 혼입 주의',
+                style: TextStyle(fontSize: 12, color: Colors.black54)),
+            const SizedBox(height: 2),
+            SelectableText(warning, style: const TextStyle(fontSize: 14)),
+          ],
+        ],
       ),
     );
   }
