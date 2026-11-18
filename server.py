@@ -28,6 +28,21 @@ print("로딩 완료. 서버 준비됨.")
 # 업로드 허용할 이미지 확장자
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
+# 글자를 충분히 읽었는지 판단하는 기준 (임시값, 실제 사진으로 조정 예정).
+# 이 기준에 못 미치면 앱이 "안전" 대신 "확인 필요"로 표시한다.
+RELIABLE_QUALITY = 0.4
+RELIABLE_MIN_CHARS = 100
+
+
+def _is_reliable(ocr_lines: list[dict]) -> bool:
+    """OCR 글자 수 가중 평균 신뢰도와 글자 수로 '충분히 읽었는지' 판단한다."""
+    total = sum(len(l["text"]) for l in ocr_lines)
+    if total == 0:
+        return False
+    quality = sum(len(l["text"]) * l["confidence"] for l in ocr_lines) / total
+    print(f"[디버그] OCR 품질: {quality:.2f}, 글자 수: {total}")
+    return bool(quality >= RELIABLE_QUALITY and total >= RELIABLE_MIN_CHARS)
+
 
 @app.get("/")
 async def root():
@@ -117,7 +132,9 @@ async def scan_label(file: UploadFile = File(...), allergens: str = Form(...)):
     try:
         _save_and_normalize(file, ext, temp_path, normalized_path)
         ocr_lines = _run_ocr(normalized_path)
-        return _rule_based_match(ocr_lines, user_allergens)
+        result = _rule_based_match(ocr_lines, user_allergens)
+        result["reliable"] = _is_reliable(ocr_lines)
+        return result
     except HTTPException:
         raise
     except Exception as e:
@@ -158,10 +175,12 @@ async def scan_label_verified(
         rule_result = _rule_based_match(ocr_lines, user_allergens)
 
         synonyms = {a: ALLERGEN_DB.get(a, [a]) for a in user_allergens}
-        return await run_in_threadpool(
+        result = await run_in_threadpool(
             verify_and_translate,
             normalized_path, ocr_lines, user_allergens, synonyms, rule_result, target_lang,
         )
+        result["reliable"] = _is_reliable(ocr_lines)
+        return result
     except HTTPException:
         raise
     except Exception as e:

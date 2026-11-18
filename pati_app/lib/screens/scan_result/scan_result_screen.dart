@@ -26,6 +26,11 @@ class ScanResultScreen extends StatelessWidget {
 
   bool get _needsRecheck => _verification?['needs_recheck'] == true;
 
+  // 글자를 충분히 읽었는지. 서버가 reliable을 보내지 않으면(구버전 서버) 읽은 것으로 본다.
+  // AI가 "사진이 흐려 읽기 어렵다(poor)"고 판단한 경우도 충분하지 않은 것으로 본다.
+  bool get _reliable =>
+      scanResult['reliable'] != false && _verification?['legibility'] != 'poor';
+
   /// 알레르겐 이름 → LLM 판정 상세 (근거 표기, 규칙/LLM 일치 여부)
   Map<String, Map<String, dynamic>> get _detailsByAllergen {
     final details = (_verification?['details'] as List?) ?? const [];
@@ -51,7 +56,8 @@ class ScanResultScreen extends StatelessWidget {
       result.add({'name': name, 'level': 'caution'});
     }
     for (final name in safeNames) {
-      result.add({'name': name, 'level': 'safe'});
+      // 인식이 불충분하면 "안전" 대신 "확인 필요"로 표시
+      result.add({'name': name, 'level': _reliable ? 'safe' : 'unverified'});
     }
 
     return result;
@@ -65,6 +71,8 @@ class ScanResultScreen extends StatelessWidget {
         return Colors.amber;
       case 'safe':
         return Colors.green;
+      case 'unverified':
+        return Colors.blueGrey;
       default:
         return Colors.grey;
     }
@@ -78,6 +86,8 @@ class ScanResultScreen extends StatelessWidget {
         return '주의';
       case 'safe':
         return '안전';
+      case 'unverified':
+        return '확인 필요';
       default:
         return '알 수 없음';
     }
@@ -91,6 +101,8 @@ class ScanResultScreen extends StatelessWidget {
         return Icons.warning_amber;
       case 'safe':
         return Icons.check_circle;
+      case 'unverified':
+        return Icons.help_outline;
       default:
         return Icons.help;
     }
@@ -105,7 +117,41 @@ class ScanResultScreen extends StatelessWidget {
         ingredients.where((e) => e['level'] == 'caution').toList();
     final safeList =
         ingredients.where((e) => e['level'] == 'safe').toList();
-    final sortedList = [...dangerList, ...cautionList, ...safeList];
+    final unverifiedList =
+        ingredients.where((e) => e['level'] == 'unverified').toList();
+    final sortedList = [
+      ...dangerList,
+      ...cautionList,
+      ...unverifiedList,
+      ...safeList,
+    ];
+
+    // 요약 배너: 위험 > 주의 > 확인 필요 > 검출 없음 순으로 표시
+    final Color bannerBg;
+    final Color bannerFg;
+    final IconData bannerIcon;
+    final String bannerText;
+    if (dangerList.isNotEmpty) {
+      bannerBg = Colors.red.shade50;
+      bannerFg = Colors.red;
+      bannerIcon = Icons.warning_rounded;
+      bannerText = '⚠️ 위험 성분 ${dangerList.length}개 발견!';
+    } else if (cautionList.isNotEmpty) {
+      bannerBg = Colors.amber.shade50;
+      bannerFg = Colors.amber.shade800;
+      bannerIcon = Icons.warning_amber;
+      bannerText = '⚠️ 주의 성분 ${cautionList.length}개 발견';
+    } else if (unverifiedList.isNotEmpty) {
+      bannerBg = Colors.blueGrey.shade50;
+      bannerFg = Colors.blueGrey;
+      bannerIcon = Icons.help_outline;
+      bannerText = '확인이 필요합니다 (인식이 불충분해요)';
+    } else {
+      bannerBg = Colors.green.shade50;
+      bannerFg = Colors.green;
+      bannerIcon = Icons.check_circle;
+      bannerText = '✅ 등록한 알레르기 성분이 검출되지 않았습니다';
+    }
 
     final details = _detailsByAllergen;
     final translatedNames = Map<String, dynamic>.from(
@@ -125,26 +171,18 @@ class ScanResultScreen extends StatelessWidget {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(16),
-            color: dangerList.isNotEmpty ? Colors.red[50] : Colors.green[50],
+            color: bannerBg,
             child: Row(
               children: [
-                Icon(
-                  dangerList.isNotEmpty
-                      ? Icons.warning_rounded
-                      : Icons.check_circle,
-                  color: dangerList.isNotEmpty ? Colors.red : Colors.green,
-                  size: 32,
-                ),
+                Icon(bannerIcon, color: bannerFg, size: 32),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    dangerList.isNotEmpty
-                        ? '⚠️ 위험 성분 ${dangerList.length}개 발견!'
-                        : '✅ 안전한 식품입니다!',
+                    bannerText,
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: dangerList.isNotEmpty ? Colors.red : Colors.green,
+                      color: bannerFg,
                     ),
                   ),
                 ),
@@ -193,10 +231,22 @@ class ScanResultScreen extends StatelessWidget {
             ),
           ),
 
+          // 항상 표시하는 안내 문구
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+            child: Text(
+              _reliable
+                  ? '인식된 글자 기준입니다. 포장지 원재료를 꼭 한 번 더 확인하세요.'
+                  : '글자를 충분히 읽지 못했습니다. 성분표에 가까이 다가가 정면에서 다시 촬영해 주세요. 포장지 원재료도 꼭 확인하세요.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey[700]),
+            ),
+          ),
+
           // 대체 식품 보기 버튼 (위험 성분이 있을 때만 표시)
           if (dangerList.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               child: SizedBox(
                 width: double.infinity,
                 height: 52,

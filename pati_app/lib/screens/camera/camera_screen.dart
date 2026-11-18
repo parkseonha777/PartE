@@ -14,7 +14,7 @@ import '../../services/translation_lang_store.dart';
 // - 안드로이드 에뮬레이터에서 테스트: http://10.0.2.2:8000
 // - 실제 폰(같은 와이파이)에서 테스트: http://<컴퓨터의 로컬 IP>:8000
 // - 나중에 서버를 실제로 배포하면 그 도메인/IP로 교체
-const String kServerBaseUrl = "http://127.0.0.1:8000";
+const String kServerBaseUrl = "http://127.0.0.1:8000"; 
 
 class CameraScreen extends StatefulWidget {
   const CameraScreen({super.key});
@@ -139,7 +139,7 @@ class _CameraScreenState extends State<CameraScreen> {
 
       final result =
           jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
-      // result 형태: {"위험": [...], "주의": [...], "안전": [...],
+      // result 형태: {"위험": [...], "주의": [...], "안전": [...], "reliable": true/false,
       //              "verification": {...}, "translation": {...}}
       // (/scan 으로 대체된 경우 verification/translation 키는 없음)
 
@@ -148,6 +148,8 @@ class _CameraScreenState extends State<CameraScreen> {
         final dangerList = List.from(result['위험'] ?? []);
         final cautionList = List.from(result['주의'] ?? []);
         final safeList = List.from(result['안전'] ?? []);
+        // 글자를 충분히 읽었는지 (서버가 보내지 않으면 true로 간주)
+        final reliable = result['reliable'] != false;
 
         String historyResult = 'safe';
         if (dangerList.isNotEmpty) {
@@ -157,7 +159,9 @@ class _CameraScreenState extends State<CameraScreen> {
         }
 
         final userId = supabase.auth.currentUser?.id;
-        if (userId != null) {
+        // 인식이 불충분하면서 위험/주의도 없는 결과는 "안전"으로 오해될 수 있어 저장하지 않음
+        if (userId != null &&
+            (reliable || dangerList.isNotEmpty || cautionList.isNotEmpty)) {
           await supabase.from('scan_history').insert({
             'user_id': userId,
             'danger_count': dangerList.length,
