@@ -28,7 +28,7 @@ class PatiApp extends StatelessWidget {
       title: '팥이',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFE53935)),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F6B54)),
         useMaterial3: true,
       ),
       home: const OnboardingScreen(),

@@ -125,13 +125,13 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               // 로고
               const Icon(Icons.document_scanner,
-                  size: 80, color: Color(0xFFE53935)),
+                  size: 80, color: Color(0xFF2F6B54)),
               const SizedBox(height: 8),
               const Text('팥이',
                   style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFE53935))),
+                      color: Color(0xFF2F6B54))),
               const SizedBox(height: 48),
 
               // 이메일
@@ -175,7 +175,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
+                    backgroundColor: const Color(0xFF2F6B54),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -215,7 +215,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                     child: const Text('회원가입',
                         style: TextStyle(
-                            color: Color(0xFFE53935),
+                            color: Color(0xFF2F6B54),
                             fontWeight: FontWeight.bold)),
                   ),
                 ],

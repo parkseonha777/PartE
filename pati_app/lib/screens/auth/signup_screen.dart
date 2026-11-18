@@ -104,7 +104,7 @@ class _SignupScreenState extends State<SignupScreen> {
       appBar: AppBar(
         title: const Text('회원가입',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFF2F6B54),
         foregroundColor: Colors.white,
       ),
       body: SafeArea(
@@ -175,7 +175,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
+                    backgroundColor: const Color(0xFF2F6B54),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),

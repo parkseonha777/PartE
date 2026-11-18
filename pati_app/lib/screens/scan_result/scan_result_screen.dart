@@ -162,7 +162,7 @@ class ScanResultScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('분석 결과',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFF2F6B54),
         foregroundColor: Colors.white,
       ),
       body: Column(
@@ -252,7 +252,7 @@ class ScanResultScreen extends StatelessWidget {
                 height: 52,
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE53935),
+                    backgroundColor: const Color(0xFF2F6B54),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -403,7 +403,7 @@ class ScanResultScreen extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.translate, size: 20, color: Color(0xFFE53935)),
+                const Icon(Icons.translate, size: 20, color: Color(0xFF2F6B54)),
                 const SizedBox(width: 8),
                 Text('번역 ($lang)',
                     style: const TextStyle(

@@ -62,7 +62,7 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
       appBar: AppBar(
         title: const Text('대체 식품 추천',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFF2F6B54),
         foregroundColor: Colors.white,
       ),
       body: Column(
@@ -75,7 +75,7 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
             child: Row(
               children: [
                 const Icon(Icons.swap_horiz,
-                    color: Color(0xFFE53935), size: 28),
+                    color: Color(0xFF2F6B54), size: 28),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -93,7 +93,7 @@ class _AlternativeScreenState extends State<AlternativeScreen> {
             child: _isLoading
                 ? const Center(
                     child: CircularProgressIndicator(
-                        color: Color(0xFFE53935)))
+                        color: Color(0xFF2F6B54)))
                 : _error != null
                     ? Center(
                         child: Padding(
