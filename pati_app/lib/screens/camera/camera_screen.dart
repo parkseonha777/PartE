@@ -232,7 +232,7 @@ class _CameraScreenState extends State<CameraScreen> {
               ListTile(
                 title: Text(entry.value),
                 trailing: entry.key == store.selected.value
-                    ? const Icon(Icons.check, color: Color(0xFFE53935))
+                    ? const Icon(Icons.check, color: Color(0xFF2F6B54))
                     : null,
                 onTap: () => Navigator.pop(context, entry.key),
               ),
@@ -250,7 +250,7 @@ class _CameraScreenState extends State<CameraScreen> {
       appBar: AppBar(
         title: const Text('성분표 스캔',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFF2F6B54),
         foregroundColor: Colors.white,
         actions: [
           // 번역 언어 선택
@@ -296,7 +296,7 @@ class _CameraScreenState extends State<CameraScreen> {
             )
           else
             const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53935)),
+              child: CircularProgressIndicator(color: Color(0xFF2F6B54)),
             ),
 
           // 가이드 프레임 오버레이
@@ -306,7 +306,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 width: 300,
                 height: 260,
                 decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFFE53935), width: 3),
+                  border: Border.all(color: const Color(0xFF2F6B54), width: 3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Align(
@@ -330,7 +330,7 @@ class _CameraScreenState extends State<CameraScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    CircularProgressIndicator(color: Color(0xFFE53935)),
+                    CircularProgressIndicator(color: Color(0xFF2F6B54)),
                     SizedBox(height: 20),
                     Text('성분 분석 중...',
                         style: TextStyle(color: Colors.white, fontSize: 18)),
@@ -356,7 +356,7 @@ class _CameraScreenState extends State<CameraScreen> {
                     height: 72,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: const Color(0xFFE53935),
+                      color: const Color(0xFF2F6B54),
                       border: Border.all(color: Colors.white, width: 4),
                     ),
                     child: const Icon(Icons.camera_alt,

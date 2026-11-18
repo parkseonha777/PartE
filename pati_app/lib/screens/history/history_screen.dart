@@ -107,12 +107,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
       appBar: AppBar(
         title: const Text('스캔 이력',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFF2F6B54),
         foregroundColor: Colors.white,
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFFE53935)))
+              child: CircularProgressIndicator(color: Color(0xFF2F6B54)))
           : _error != null
               ? Center(
                   child: Padding(

@@ -121,13 +121,13 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
       appBar: AppBar(
         title: const Text('알레르기 프로필',
             style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: const Color(0xFFE53935),
+        backgroundColor: const Color(0xFF2F6B54),
         foregroundColor: Colors.white,
         // 최초 가입 흐름에서는 뒤로가기 버튼 숨김, 설정에서 들어온 경우엔 보여줌
         automaticallyImplyLeading: widget.isEditMode,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFFE53935)))
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF2F6B54)))
           : Column(
               children: [
                 // 안내 문구
@@ -143,7 +143,7 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
                       const SizedBox(height: 4),
                       Text('선택된 성분: $selectedCount개',
                           style: const TextStyle(
-                              color: Color(0xFFE53935),
+                              color: Color(0xFF2F6B54),
                               fontWeight: FontWeight.bold)),
                     ],
                   ),
@@ -170,12 +170,12 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
                         child: Container(
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFFE53935)
+                                ? const Color(0xFF2F6B54)
                                 : Colors.grey[100],
                             borderRadius: BorderRadius.circular(8),
                             border: Border.all(
                               color: isSelected
-                                  ? const Color(0xFFE53935)
+                                  ? const Color(0xFF2F6B54)
                                   : Colors.grey[300]!,
                             ),
                           ),
@@ -204,7 +204,7 @@ class _AllergyProfileScreenState extends State<AllergyProfileScreen> {
                     height: 52,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE53935),
+                        backgroundColor: const Color(0xFF2F6B54),
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
