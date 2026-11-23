@@ -13,7 +13,7 @@ class ScanGuideScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text('팥이',
+        title: const Text('아라채',
             style: TextStyle(fontWeight: FontWeight.bold, color: _text)),
         backgroundColor: Colors.white,
         surfaceTintColor: Colors.white,

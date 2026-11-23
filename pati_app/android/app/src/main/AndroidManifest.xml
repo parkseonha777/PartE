@@ -2,7 +2,7 @@
 <uses-permission android:name="android.permission.CAMERA"/>
 <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="pati_app"
+        android:label="아라채"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

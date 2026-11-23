@@ -134,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const Icon(Icons.document_scanner,
                   size: 80, color: Color(0xFF2F6B54)),
               const SizedBox(height: 8),
-              const Text('팥이',
+              const Text('아라채',
                   style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
